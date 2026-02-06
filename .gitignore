@@ -5,6 +5,10 @@ bin/
 coverage.out
 coverage.html
 
+# Secrets — NEVER commit credentials
+secrets.yaml
+**/secrets.yaml
+
 # OS files
 .DS_Store
 Thumbs.db

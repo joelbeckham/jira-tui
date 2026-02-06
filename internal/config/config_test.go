@@ -6,12 +6,15 @@ import (
 	"testing"
 )
 
-func TestLoadValidConfig(t *testing.T) {
-	content := `
+const validSecrets = `
 jira:
-  base_url: https://example.atlassian.net
   email: user@example.com
   api_token: secret-token
+`
+
+const validConfigWithTabs = `
+jira:
+  base_url: https://example.atlassian.net
 tabs:
   - label: "My Work"
     filter_id: "10100"
@@ -21,8 +24,12 @@ tabs:
     filter_url: "https://example.atlassian.net/issues/?filter=10102"
     columns: ["key", "summary", "priority"]
 `
-	path := writeTestConfig(t, content)
-	cfg, err := Load(path)
+
+func TestLoadValidConfig(t *testing.T) {
+	cfgPath := writeTestFile(t, "config.yaml", validConfigWithTabs)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+
+	cfg, err := Load(cfgPath, secPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -50,125 +57,129 @@ tabs:
 }
 
 func TestLoadMissingBaseURL(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
-  email: user@example.com
-  api_token: secret-token
+  base_url: ""
 tabs:
   - label: "Work"
     filter_id: "10100"
     columns: ["key", "summary"]
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing base_url")
 	}
 }
 
 func TestLoadMissingEmail(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
   base_url: https://example.atlassian.net
-  api_token: secret-token
 tabs:
   - label: "Work"
     filter_id: "10100"
     columns: ["key", "summary"]
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", `
+jira:
+  api_token: secret-token
+`)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing email")
 	}
 }
 
 func TestLoadMissingAPIToken(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
   base_url: https://example.atlassian.net
-  email: user@example.com
 tabs:
   - label: "Work"
     filter_id: "10100"
     columns: ["key", "summary"]
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", `
+jira:
+  email: user@example.com
+`)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing api_token")
 	}
 }
 
 func TestLoadNoTabs(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
   base_url: https://example.atlassian.net
-  email: user@example.com
-  api_token: secret-token
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing tabs")
 	}
 }
 
 func TestLoadTabMissingLabel(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
   base_url: https://example.atlassian.net
-  email: user@example.com
-  api_token: secret-token
 tabs:
   - filter_id: "10100"
     columns: ["key", "summary"]
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing tab label")
 	}
 }
 
 func TestLoadTabMissingFilter(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
   base_url: https://example.atlassian.net
-  email: user@example.com
-  api_token: secret-token
 tabs:
   - label: "Work"
     columns: ["key", "summary"]
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing filter_id/filter_url")
 	}
 }
 
 func TestLoadTabMissingColumns(t *testing.T) {
-	content := `
+	cfgPath := writeTestFile(t, "config.yaml", `
 jira:
   base_url: https://example.atlassian.net
-  email: user@example.com
-  api_token: secret-token
 tabs:
   - label: "Work"
     filter_id: "10100"
-`
-	path := writeTestConfig(t, content)
-	_, err := Load(path)
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
 	if err == nil {
 		t.Fatal("expected validation error for missing columns")
 	}
 }
 
-func TestLoadMissingFile(t *testing.T) {
-	_, err := Load("/nonexistent/path/config.yaml")
+func TestLoadMissingConfigFile(t *testing.T) {
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load("/nonexistent/path/config.yaml", secPath)
 	if err == nil {
-		t.Fatal("expected error for missing file")
+		t.Fatal("expected error for missing config file")
+	}
+}
+
+func TestLoadMissingSecretsFile(t *testing.T) {
+	cfgPath := writeTestFile(t, "config.yaml", validConfigWithTabs)
+	_, err := Load(cfgPath, "/nonexistent/path/secrets.yaml")
+	if err == nil {
+		t.Fatal("expected error for missing secrets file")
 	}
 }
 
@@ -229,12 +240,12 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func writeTestConfig(t *testing.T, content string) string {
+func writeTestFile(t *testing.T, name, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
+	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("writing test config: %v", err)
+		t.Fatalf("writing test file %s: %v", name, err)
 	}
 	return path
 }

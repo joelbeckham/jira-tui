@@ -11,14 +11,27 @@ import (
 
 // Config holds the application configuration.
 type Config struct {
-	Jira JiraConfig `yaml:"jira"`
-	Tabs []TabConfig `yaml:"tabs"`
+	Jira  JiraConfig  `yaml:"jira"`
+	Tabs  []TabConfig `yaml:"tabs"`
 	Cache CacheConfig `yaml:"cache"`
 }
 
 // JiraConfig holds Jira-specific configuration.
+// Connection details live in config.yaml; credentials live in a separate
+// secrets.yaml file that is gitignored.
 type JiraConfig struct {
 	BaseURL  string `yaml:"base_url"`
+	Email    string `yaml:"email"`
+	APIToken string `yaml:"api_token"` // loaded from secrets file, not config
+}
+
+// SecretsConfig holds sensitive credentials loaded from a separate file.
+type SecretsConfig struct {
+	Jira JiraSecrets `yaml:"jira"`
+}
+
+// JiraSecrets holds the Jira credentials.
+type JiraSecrets struct {
 	Email    string `yaml:"email"`
 	APIToken string `yaml:"api_token"`
 }
@@ -37,18 +50,37 @@ type CacheConfig struct {
 	TTL string `yaml:"ttl"` // duration string, e.g. "5m"
 }
 
-// DefaultConfigPath returns the default config file path.
-func DefaultConfigPath() (string, error) {
+// DefaultConfigDir returns the default config directory path.
+func DefaultConfigDir() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("getting config dir: %w", err)
 	}
-	return filepath.Join(configDir, "jira-tui", "config.yaml"), nil
+	return filepath.Join(configDir, "jira-tui"), nil
 }
 
-// Load reads and parses the config file at the given path.
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+// DefaultConfigPath returns the default config file path.
+func DefaultConfigPath() (string, error) {
+	dir, err := DefaultConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.yaml"), nil
+}
+
+// DefaultSecretsPath returns the default secrets file path.
+func DefaultSecretsPath() (string, error) {
+	dir, err := DefaultConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "secrets.yaml"), nil
+}
+
+// Load reads and parses the config and secrets files.
+// configPath is the path to config.yaml, secretsPath is the path to secrets.yaml.
+func Load(configPath, secretsPath string) (*Config, error) {
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file: %w", err)
 	}
@@ -57,6 +89,21 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
+
+	// Load secrets from separate file
+	secretsData, err := os.ReadFile(secretsPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading secrets file: %w", err)
+	}
+
+	var secrets SecretsConfig
+	if err := yaml.Unmarshal(secretsData, &secrets); err != nil {
+		return nil, fmt.Errorf("parsing secrets file: %w", err)
+	}
+
+	// Merge secrets into config
+	cfg.Jira.Email = secrets.Jira.Email
+	cfg.Jira.APIToken = secrets.Jira.APIToken
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
