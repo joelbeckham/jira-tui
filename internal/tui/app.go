@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -644,6 +645,7 @@ func (a App) renderStatusBar() string {
 var editHotkeys = map[string]bool{
 	"s": true, "p": true, "d": true, "e": true,
 	"t": true, "i": true, "a": true, "delete": true,
+	"u": true, "k": true,
 }
 
 // handleEditHotkey processes edit hotkeys (s/p/d/e/t/i/a/del) for the given
@@ -653,6 +655,37 @@ func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea
 	key := msg.String()
 	if !editHotkeys[key] {
 		return a, nil, false
+	}
+
+	// Clipboard hotkeys don't require a Jira connection.
+	switch key {
+	case "k":
+		// Copy issue key to clipboard
+		if err := clipboard.WriteAll(issue.Key); err != nil {
+			a.flash = "Clipboard unavailable"
+			a.flashIsErr = true
+		} else {
+			a.flash = "Copied " + issue.Key
+			a.flashIsErr = false
+		}
+		return a, nil, true
+
+	case "u":
+		// Copy issue URL to clipboard
+		if a.client == nil {
+			a.flash = "Not connected to Jira"
+			a.flashIsErr = true
+			return a, nil, true
+		}
+		url := a.client.BrowseURL(issue.Key)
+		if err := clipboard.WriteAll(url); err != nil {
+			a.flash = "Clipboard unavailable"
+			a.flashIsErr = true
+		} else {
+			a.flash = "Copied URL"
+			a.flashIsErr = false
+		}
+		return a, nil, true
 	}
 
 	if a.client == nil {

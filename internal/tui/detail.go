@@ -136,8 +136,8 @@ func (v *issueDetailView) renderContent() string {
 
 	var b strings.Builder
 
-	// Header: KEY ▸ Parent (if any)
-	header := detailKeyStyle.Render(issue.Key)
+	// Header: KEY(k) ▸ Parent (if any)
+	header := detailKeyStyle.Render(issue.Key) + detailHintStyle.Render("(k)")
 	if fields.Parent != nil {
 		parentLabel := fields.Parent.Key
 		if fields.Parent.Fields != nil && fields.Parent.Fields.Summary != "" {
@@ -246,7 +246,7 @@ func (v *issueDetailView) renderContent() string {
 
 	// Actions hint line
 	b.WriteString("\n")
-	b.WriteString(detailHintStyle.Render("d: mark done  del: delete") + "\n")
+	b.WriteString(detailHintStyle.Render("d: mark done  u: copy url  del: delete") + "\n")
 
 	return b.String()
 }

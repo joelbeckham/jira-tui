@@ -45,6 +45,11 @@ func NewClient(baseURL, email, apiToken string, opts ...ClientOption) *Client {
 	return c
 }
 
+// BrowseURL returns the Jira web URL for the given issue key.
+func (c *Client) BrowseURL(issueKey string) string {
+	return c.baseURL + "/browse/" + issueKey
+}
+
 // do executes an HTTP request with authentication and returns the response body.
 func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([]byte, error) {
 	url := c.baseURL + path
