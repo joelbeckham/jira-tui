@@ -541,32 +541,117 @@ func TestEditHotkeyIFromDetailView(t *testing.T) {
 	}
 }
 
-func TestEditHotkeyUnimplementedShowsFlash(t *testing.T) {
+func TestEditHotkeySpawnsOverlays(t *testing.T) {
 	app := testAppReady()
-	// Give it a fake client so it doesn't hit "not connected"
 	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
 
-	keys := []struct {
-		key      string
-		expected string
-	}{
-		{"s", "not yet implemented"},
-		{"p", "not yet implemented"},
-		{"a", "not yet implemented"},
-		{"t", "not yet implemented"},
-		{"e", "not yet implemented"},
-	}
-
-	for _, tc := range keys {
-		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.key)})
+	t.Run("p opens priority overlay", func(t *testing.T) {
+		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
 		updated := model.(App)
-		if !updated.flashIsErr {
-			t.Errorf("key '%s': expected error flash", tc.key)
+		if updated.overlay == nil {
+			t.Fatal("expected overlay to be set")
 		}
-		if !strings.Contains(strings.ToLower(updated.flash), tc.expected) {
-			t.Errorf("key '%s': expected flash containing '%s', got: %s", tc.key, tc.expected, updated.flash)
+		if _, ok := updated.overlay.(*selectionOverlay); !ok {
+			t.Fatalf("expected selectionOverlay, got %T", updated.overlay)
 		}
-	}
+		if updated.overlayIssue != "PROJ-1" {
+			t.Errorf("expected overlayIssue=PROJ-1, got %s", updated.overlayIssue)
+		}
+		if updated.overlayAction != overlayActionPriority {
+			t.Errorf("expected overlayActionPriority, got %d", updated.overlayAction)
+		}
+	})
+
+	t.Run("t opens title overlay", func(t *testing.T) {
+		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+		updated := model.(App)
+		if updated.overlay == nil {
+			t.Fatal("expected overlay to be set")
+		}
+		if _, ok := updated.overlay.(*textInputOverlay); !ok {
+			t.Fatalf("expected textInputOverlay, got %T", updated.overlay)
+		}
+		if updated.overlayAction != overlayActionTitle {
+			t.Errorf("expected overlayActionTitle, got %d", updated.overlayAction)
+		}
+	})
+
+	t.Run("e opens description overlay", func(t *testing.T) {
+		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+		updated := model.(App)
+		if updated.overlay == nil {
+			t.Fatal("expected overlay to be set")
+		}
+		if _, ok := updated.overlay.(*textEditorOverlay); !ok {
+			t.Fatalf("expected textEditorOverlay, got %T", updated.overlay)
+		}
+		if updated.overlayAction != overlayActionDescription {
+			t.Errorf("expected overlayActionDescription, got %d", updated.overlayAction)
+		}
+	})
+
+	t.Run("delete opens confirm overlay", func(t *testing.T) {
+		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyDelete})
+		updated := model.(App)
+		if updated.overlay == nil {
+			t.Fatal("expected overlay to be set")
+		}
+		if _, ok := updated.overlay.(*confirmOverlay); !ok {
+			t.Fatalf("expected confirmOverlay, got %T", updated.overlay)
+		}
+		if updated.overlayAction != overlayActionDelete {
+			t.Errorf("expected overlayActionDelete, got %d", updated.overlayAction)
+		}
+	})
+
+	t.Run("s fires async transitions fetch", func(t *testing.T) {
+		model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+		updated := model.(App)
+		if updated.overlay != nil {
+			t.Error("overlay should NOT be set yet (transitions loading async)")
+		}
+		if cmd == nil {
+			t.Error("expected a cmd for async transition fetch")
+		}
+		if updated.overlayAction != overlayActionTransition {
+			t.Errorf("expected overlayActionTransition, got %d", updated.overlayAction)
+		}
+	})
+
+	t.Run("a fires async user fetch when no cache", func(t *testing.T) {
+		app2 := testAppReady()
+		app2.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+		app2.cachedUsers = nil // no cache
+		model, cmd := app2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+		updated := model.(App)
+		if updated.overlay != nil {
+			t.Error("overlay should NOT be set yet (users loading async)")
+		}
+		if cmd == nil {
+			t.Error("expected a cmd for async user fetch")
+		}
+	})
+
+	t.Run("a opens overlay when cache exists", func(t *testing.T) {
+		app2 := testAppReady()
+		app2.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+		app2.cachedUsers = []config.CachedUser{
+			{AccountID: "abc123", DisplayName: "Alice"},
+			{AccountID: "def456", DisplayName: "Bob"},
+		}
+		model, _ := app2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+		updated := model.(App)
+		if updated.overlay == nil {
+			t.Fatal("expected overlay to be set from cache")
+		}
+		sel, ok := updated.overlay.(*selectionOverlay)
+		if !ok {
+			t.Fatalf("expected selectionOverlay, got %T", updated.overlay)
+		}
+		if len(sel.items) != 2 {
+			t.Errorf("expected 2 items, got %d", len(sel.items))
+		}
+	})
 }
 
 func TestEditHotkeyClearsFlashOnNextKey(t *testing.T) {
@@ -734,5 +819,326 @@ func TestFlashAppearsInStatusBar(t *testing.T) {
 	view := app.View()
 	if !strings.Contains(view, "Issue updated") {
 		t.Errorf("expected flash in view, got: %s", view)
+	}
+}
+
+// --- Overlay interaction tests ---
+
+func TestOverlayEscCancels(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// Open priority overlay
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	app = model.(App)
+	if app.overlay == nil {
+		t.Fatal("expected overlay after 'p'")
+	}
+
+	// Esc should dismiss without action
+	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	updated := model.(App)
+	if updated.overlay != nil {
+		t.Error("expected overlay to be nil after Esc")
+	}
+	if updated.overlayAction != overlayActionNone {
+		t.Error("expected overlayAction reset to None")
+	}
+}
+
+func TestOverlayRoutesKeysToOverlay(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// Open priority overlay
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	app = model.(App)
+
+	// 'q' should NOT quit when overlay is active (routed to overlay's filter)
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	updated := model.(App)
+	// Should still have overlay active (filter typed 'q')
+	if updated.overlay == nil {
+		t.Error("overlay should still be active — 'q' should be routed to overlay")
+	}
+	// Should NOT have a quit cmd
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(tea.QuitMsg); ok {
+			t.Error("'q' should not quit when overlay is active")
+		}
+	}
+}
+
+func TestOverlayCtrlCStillQuits(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// Open overlay
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	app = model.(App)
+
+	// Ctrl+C should still quit
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("expected quit command")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Error("expected QuitMsg from Ctrl+C with overlay active")
+	}
+}
+
+func TestTransitionsLoadedMsgOpensOverlay(t *testing.T) {
+	app := testAppReady()
+	app.overlayAction = overlayActionTransition
+	transitions := []jira.Transition{
+		{ID: "11", Name: "To Do"},
+		{ID: "21", Name: "In Progress"},
+		{ID: "31", Name: "Done"},
+	}
+
+	model, _ := app.Update(transitionsLoadedMsg{issueKey: "PROJ-1", transitions: transitions})
+	updated := model.(App)
+
+	if updated.overlay == nil {
+		t.Fatal("expected overlay after transitions loaded")
+	}
+	sel, ok := updated.overlay.(*selectionOverlay)
+	if !ok {
+		t.Fatalf("expected selectionOverlay, got %T", updated.overlay)
+	}
+	if len(sel.items) != 3 {
+		t.Errorf("expected 3 items, got %d", len(sel.items))
+	}
+}
+
+func TestTransitionsLoadedMsgError(t *testing.T) {
+	app := testAppReady()
+	model, _ := app.Update(transitionsLoadedMsg{
+		issueKey: "PROJ-1",
+		err:      fmt.Errorf("no permission"),
+	})
+	updated := model.(App)
+	if !updated.flashIsErr {
+		t.Error("expected error flash")
+	}
+	if !strings.Contains(updated.flash, "no permission") {
+		t.Errorf("expected error in flash, got: %s", updated.flash)
+	}
+}
+
+func TestUsersLoadedMsgOpensOverlay(t *testing.T) {
+	app := testAppReady()
+	app.overlayAction = overlayActionAssignee
+	app.overlayIssue = "PROJ-1"
+	users := []config.CachedUser{
+		{AccountID: "a1", DisplayName: "Alice"},
+		{AccountID: "b2", DisplayName: "Bob"},
+	}
+
+	model, _ := app.Update(usersLoadedMsg{users: users})
+	updated := model.(App)
+
+	if updated.overlay == nil {
+		t.Fatal("expected overlay after users loaded")
+	}
+	if len(updated.cachedUsers) != 2 {
+		t.Errorf("expected 2 cached users, got %d", len(updated.cachedUsers))
+	}
+}
+
+func TestUsersLoadedMsgError(t *testing.T) {
+	app := testAppReady()
+	model, _ := app.Update(usersLoadedMsg{err: fmt.Errorf("fetch failed")})
+	updated := model.(App)
+	if !updated.flashIsErr || !strings.Contains(updated.flash, "fetch failed") {
+		t.Errorf("expected error flash, got: %s", updated.flash)
+	}
+}
+
+func TestIssueDeletedMsgRemovesFromTabs(t *testing.T) {
+	app := testAppReady()
+	origLen := len(app.tabs[0].issues)
+
+	model, _ := app.Update(issueDeletedMsg{issueKey: "PROJ-1"})
+	updated := model.(App)
+
+	if len(updated.tabs[0].issues) != origLen-1 {
+		t.Errorf("expected %d issues after delete, got %d", origLen-1, len(updated.tabs[0].issues))
+	}
+	for _, issue := range updated.tabs[0].issues {
+		if issue.Key == "PROJ-1" {
+			t.Error("PROJ-1 should have been removed from tab")
+		}
+	}
+	if !strings.Contains(updated.flash, "PROJ-1 deleted") {
+		t.Errorf("expected deletion flash, got: %s", updated.flash)
+	}
+}
+
+func TestIssueDeletedMsgPopsDetailView(t *testing.T) {
+	app := testAppReady()
+
+	// Push detail view for PROJ-1
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = model.(App)
+	if len(app.viewStack) == 0 {
+		t.Fatal("expected view stack to have detail view")
+	}
+
+	model, _ = app.Update(issueDeletedMsg{issueKey: "PROJ-1"})
+	updated := model.(App)
+
+	if len(updated.viewStack) != 0 {
+		t.Error("expected detail view to be popped after deleting viewed issue")
+	}
+}
+
+func TestIssueDeletedMsgError(t *testing.T) {
+	app := testAppReady()
+	model, _ := app.Update(issueDeletedMsg{issueKey: "PROJ-1", err: fmt.Errorf("permission denied")})
+	updated := model.(App)
+	if !updated.flashIsErr || !strings.Contains(updated.flash, "permission denied") {
+		t.Errorf("expected error flash, got: %s", updated.flash)
+	}
+}
+
+func TestOverlayAppearsInView(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// Open priority overlay
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	app = model.(App)
+
+	view := app.View()
+	if !strings.Contains(view, "Change Priority") {
+		t.Errorf("expected 'Change Priority' in view when overlay is active")
+	}
+}
+
+func TestHandleOverlayResultTransition(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.overlayIssue = "PROJ-1"
+	app.overlayAction = overlayActionTransition
+	app.overlay = newSelectionOverlay("Change Status", []selectionItem{{ID: "31", Label: "Done"}})
+
+	// Simulate selecting "Done" and calling handleOverlayResult
+	result := &selectionItem{ID: "31", Label: "Done"}
+	model, cmd := app.handleOverlayResult(result)
+	updated := model.(App)
+
+	if updated.overlay != nil {
+		t.Error("expected overlay to be cleared")
+	}
+	if cmd == nil {
+		t.Error("expected a cmd for transition")
+	}
+	if !strings.Contains(updated.flash, "Transitioning") {
+		t.Errorf("expected transition flash, got: %s", updated.flash)
+	}
+}
+
+func TestHandleOverlayResultPriority(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.overlayIssue = "PROJ-1"
+	app.overlayAction = overlayActionPriority
+	app.overlay = newSelectionOverlay("Priority", nil)
+
+	result := &selectionItem{ID: "2", Label: "High"}
+	model, cmd := app.handleOverlayResult(result)
+	updated := model.(App)
+
+	if updated.overlay != nil {
+		t.Error("expected overlay to be cleared")
+	}
+	if cmd == nil {
+		t.Error("expected a cmd for priority update")
+	}
+}
+
+func TestHandleOverlayResultTitle(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.overlayIssue = "PROJ-1"
+	app.overlayAction = overlayActionTitle
+
+	model, cmd := app.handleOverlayResult("New Title")
+	updated := model.(App)
+	if cmd == nil {
+		t.Error("expected a cmd for title update")
+	}
+	if !strings.Contains(updated.flash, "Updating title") {
+		t.Errorf("expected title flash, got: %s", updated.flash)
+	}
+}
+
+func TestHandleOverlayResultDescription(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.overlayIssue = "PROJ-1"
+	app.overlayAction = overlayActionDescription
+
+	model, cmd := app.handleOverlayResult("Updated description")
+	updated := model.(App)
+	if cmd == nil {
+		t.Error("expected a cmd for description update")
+	}
+	if !strings.Contains(updated.flash, "Updating description") {
+		t.Errorf("expected description flash, got: %s", updated.flash)
+	}
+}
+
+func TestHandleOverlayResultDelete(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.overlayIssue = "PROJ-1"
+	app.overlayAction = overlayActionDelete
+
+	model, cmd := app.handleOverlayResult(true)
+	updated := model.(App)
+	if cmd == nil {
+		t.Error("expected a cmd for delete")
+	}
+	if !strings.Contains(updated.flash, "Deleting") {
+		t.Errorf("expected delete flash, got: %s", updated.flash)
+	}
+}
+
+func TestHandleOverlayResultCancel(t *testing.T) {
+	app := testAppReady()
+	app.overlayIssue = "PROJ-1"
+	app.overlayAction = overlayActionPriority
+	app.overlay = newSelectionOverlay("Priority", nil)
+
+	model, cmd := app.handleOverlayResult(nil)
+	updated := model.(App)
+	if updated.overlay != nil {
+		t.Error("expected overlay cleared on cancel")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd on cancel")
+	}
+}
+
+func TestEditHotkeyFromDetailView(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// Push detail view
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = model.(App)
+
+	// 't' should open title overlay targeting the detail view's issue
+	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	updated := model.(App)
+	if updated.overlay == nil {
+		t.Fatal("expected overlay from detail view 't' hotkey")
+	}
+	if updated.overlayIssue != "PROJ-1" {
+		t.Errorf("expected overlayIssue=PROJ-1, got %s", updated.overlayIssue)
 	}
 }

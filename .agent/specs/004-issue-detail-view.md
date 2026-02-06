@@ -1,6 +1,6 @@
 # Spec 004 — Issue Detail View & Hotkey Editing
 
-> Status: draft
+> Status: in-progress (Phase C complete — overlay system + field editing)
 > Date: 2025-07-17
 
 ## Summary
@@ -13,11 +13,11 @@ quick-create for new issues with sensible defaults.
 
 ## Goals
 
-- [ ] Full read-only detail layout (all core fields + relations)
-- [ ] Hotkey-driven inline field editing (s/p/d/e/t/i/a)
-- [ ] Delete issue with confirmation (del)
+- [x] Full read-only detail layout (all core fields + relations)
+- [x] Hotkey-driven inline field editing (s/p/d/e/t/i/a)
+- [x] Delete issue with confirmation (del)
 - [ ] Quick-create new issue (c) with defaults from config
-- [ ] New Jira API methods (GetIssue, UpdateIssue, CreateIssue, GetTransitions,
+- [x] New Jira API methods (GetIssue, UpdateIssue, CreateIssue, GetTransitions,
       TransitionIssue, DeleteIssue, SearchUsers)
 
 ## Non-Goals

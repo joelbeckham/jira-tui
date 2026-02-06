@@ -49,6 +49,25 @@ type issueDetailMsg struct {
 	err      error
 }
 
+// transitionsLoadedMsg delivers available transitions for the status overlay.
+type transitionsLoadedMsg struct {
+	issueKey    string
+	transitions []jira.Transition
+	err         error
+}
+
+// usersLoadedMsg delivers the user list for the assignee overlay.
+type usersLoadedMsg struct {
+	users []config.CachedUser
+	err   error
+}
+
+// issueDeletedMsg is sent after a successful issue deletion.
+type issueDeletedMsg struct {
+	issueKey string
+	err      error
+}
+
 // --- View stack ---
 
 // view is a stacked view that renders on top of the tab bar.
@@ -77,8 +96,14 @@ type App struct {
 	activeTab int
 	viewStack []view
 
+	overlay       overlay       // active overlay (nil = none)
+	overlayIssue  string        // issue key the overlay is targeting
+	overlayAction overlayAction // which edit action the overlay is for
+
 	flash      string // transient status message
 	flashIsErr bool   // true if the flash is an error
+
+	cachedUsers []config.CachedUser // loaded at startup from user cache
 }
 
 // NewApp creates a new App model.
@@ -191,6 +216,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a.user = msg.user
 			a.connected = true
+			// Load user cache (non-blocking, best effort)
+			a.cachedUsers, _ = config.LoadUserCache()
 			// Auth succeeded — load all tabs eagerly
 			return a, a.loadAllTabs()
 		}
@@ -246,6 +273,62 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case transitionsLoadedMsg:
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+		} else {
+			items := make([]selectionItem, len(msg.transitions))
+			for i, t := range msg.transitions {
+				items[i] = selectionItem{ID: t.ID, Label: t.Name}
+			}
+			a.overlay = newSelectionOverlay("Change Status", items)
+			a.overlayIssue = msg.issueKey
+			// overlayAction was already set to overlayActionTransition by handleEditHotkey
+		}
+
+	case usersLoadedMsg:
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+		} else {
+			a.cachedUsers = msg.users
+			items := make([]selectionItem, len(msg.users))
+			for i, u := range msg.users {
+				items[i] = selectionItem{ID: u.AccountID, Label: u.DisplayName, Desc: u.Email}
+			}
+			a.overlay = newSelectionOverlay("Assign To", items)
+			// overlayIssue and overlayAction were already set by handleEditHotkey
+		}
+
+	case issueDeletedMsg:
+		a.flash = ""
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+		} else {
+			// Pop detail view if it's showing the deleted issue
+			if len(a.viewStack) > 0 {
+				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+					if dv.issue.Key == msg.issueKey {
+						a.viewStack = a.viewStack[:len(a.viewStack)-1]
+					}
+				}
+			}
+			// Remove from all tabs
+			for ti := range a.tabs {
+				for ii := range a.tabs[ti].issues {
+					if a.tabs[ti].issues[ii].Key == msg.issueKey {
+						a.tabs[ti].issues = append(a.tabs[ti].issues[:ii], a.tabs[ti].issues[ii+1:]...)
+						a.tabs[ti].applyFilter()
+						break
+					}
+				}
+			}
+			a.flash = msg.issueKey + " deleted"
+			a.flashIsErr = false
+		}
+
 	case tea.KeyMsg:
 		a.flash = "" // clear flash on any keypress
 		return a.handleKey(msg)
@@ -261,6 +344,16 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "ctrl+c":
 		return a, tea.Quit
+	}
+
+	// If an overlay is active, route ALL keys to it
+	if a.overlay != nil {
+		var cmd tea.Cmd
+		a.overlay, cmd = a.overlay.Update(msg)
+		if isDone, result := a.overlay.done(); isDone {
+			return a.handleOverlayResult(result)
+		}
+		return a, cmd
 	}
 
 	// If a view is on the stack, handle stack-specific keys
@@ -414,7 +507,14 @@ func (a App) View() string {
 	sections = append(sections, a.renderTabBar())
 
 	// Main content area
-	if len(a.viewStack) > 0 {
+	if a.overlay != nil {
+		// Render the underlying view then overlay on top
+		if len(a.viewStack) > 0 {
+			sections = append(sections, a.overlay.View(a.width, a.height-2))
+		} else {
+			sections = append(sections, a.overlay.View(a.width, a.height-2))
+		}
+	} else if len(a.viewStack) > 0 {
 		sections = append(sections, a.renderStackView())
 	} else if a.checking {
 		sections = append(sections, loadingStyle.Render("Connecting to Jira..."))
@@ -581,37 +681,143 @@ func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea
 		return a, a.cmdAssignToMe(issue.Key, a.user), true
 
 	case "s":
-		a.flash = "Status change not yet implemented (needs overlay)"
-		a.flashIsErr = true
-		return a, nil, true
+		// Status — async fetch transitions, then show selection overlay
+		a.overlayIssue = issue.Key
+		a.overlayAction = overlayActionTransition
+		a.flash = "Loading transitions..."
+		a.flashIsErr = false
+		return a, a.cmdFetchTransitions(issue.Key), true
 
 	case "p":
-		a.flash = "Priority change not yet implemented (needs overlay)"
-		a.flashIsErr = true
+		// Priority — show selection overlay with standard priority levels
+		items := []selectionItem{
+			{ID: "1", Label: "Highest"},
+			{ID: "2", Label: "High"},
+			{ID: "3", Label: "Medium"},
+			{ID: "4", Label: "Low"},
+			{ID: "5", Label: "Lowest"},
+		}
+		a.overlay = newSelectionOverlay("Change Priority", items)
+		a.overlayIssue = issue.Key
+		a.overlayAction = overlayActionPriority
 		return a, nil, true
 
 	case "a":
-		a.flash = "Assignee picker not yet implemented (needs overlay)"
-		a.flashIsErr = true
-		return a, nil, true
+		// Assignee — show selection overlay with cached users (or fetch them)
+		a.overlayIssue = issue.Key
+		a.overlayAction = overlayActionAssignee
+		if len(a.cachedUsers) > 0 {
+			items := make([]selectionItem, len(a.cachedUsers))
+			for i, u := range a.cachedUsers {
+				items[i] = selectionItem{ID: u.AccountID, Label: u.DisplayName, Desc: u.Email}
+			}
+			a.overlay = newSelectionOverlay("Assign To", items)
+			return a, nil, true
+		}
+		// No cache — fetch users from API
+		a.flash = "Loading users..."
+		a.flashIsErr = false
+		return a, a.cmdFetchAndCacheUsers(), true
 
 	case "t":
-		a.flash = "Title edit not yet implemented (needs overlay)"
-		a.flashIsErr = true
+		// Title — text input overlay pre-filled with current summary
+		a.overlay = newTextInputOverlay("Edit Title", issue.Fields.Summary)
+		a.overlayIssue = issue.Key
+		a.overlayAction = overlayActionTitle
 		return a, nil, true
 
 	case "e":
-		a.flash = "Description edit not yet implemented (needs overlay)"
-		a.flashIsErr = true
+		// Description — text editor overlay pre-filled with current description
+		desc := extractADFText(issue.Fields.Description)
+		a.overlay = newTextEditorOverlay("Edit Description", desc, a.width, a.height)
+		a.overlayIssue = issue.Key
+		a.overlayAction = overlayActionDescription
 		return a, nil, true
 
 	case "delete":
-		a.flash = "Delete not yet implemented (needs confirmation overlay)"
-		a.flashIsErr = true
+		// Delete — confirmation overlay
+		a.overlay = newConfirmOverlay(fmt.Sprintf("Delete %s? This cannot be undone.", issue.Key))
+		a.overlayIssue = issue.Key
+		a.overlayAction = overlayActionDelete
 		return a, nil, true
 	}
 
 	return a, nil, false
+}
+
+// overlayAction identifies which edit action the overlay result maps to.
+type overlayAction int
+
+const (
+	overlayActionNone overlayAction = iota
+	overlayActionTransition
+	overlayActionPriority
+	overlayActionAssignee
+	overlayActionTitle
+	overlayActionDescription
+	overlayActionDelete
+)
+
+// handleOverlayResult processes the result of a completed overlay and dispatches
+// the appropriate API call. Called when overlay.done() returns true.
+func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
+	issueKey := a.overlayIssue
+	action := a.overlayAction
+	a.overlay = nil
+	a.overlayIssue = ""
+	a.overlayAction = overlayActionNone
+
+	if result == nil {
+		// User cancelled
+		return a, nil
+	}
+
+	switch action {
+	case overlayActionTransition:
+		item := result.(*selectionItem)
+		a.flash = "Transitioning " + issueKey + "..."
+		a.flashIsErr = false
+		return a, a.cmdTransitionIssue(issueKey, item.ID)
+
+	case overlayActionPriority:
+		item := result.(*selectionItem)
+		a.flash = "Setting priority on " + issueKey + "..."
+		a.flashIsErr = false
+		return a, a.cmdUpdateField(issueKey, map[string]interface{}{
+			"priority": map[string]interface{}{"name": item.Label},
+		})
+
+	case overlayActionAssignee:
+		item := result.(*selectionItem)
+		a.flash = "Assigning " + issueKey + "..."
+		a.flashIsErr = false
+		return a, a.cmdUpdateField(issueKey, map[string]interface{}{
+			"assignee": map[string]interface{}{"accountId": item.ID},
+		})
+
+	case overlayActionTitle:
+		newTitle := result.(string)
+		a.flash = "Updating title of " + issueKey + "..."
+		a.flashIsErr = false
+		return a, a.cmdUpdateField(issueKey, map[string]interface{}{
+			"summary": newTitle,
+		})
+
+	case overlayActionDescription:
+		newDesc := result.(string)
+		a.flash = "Updating description of " + issueKey + "..."
+		a.flashIsErr = false
+		return a, a.cmdUpdateField(issueKey, map[string]interface{}{
+			"description": makeADFDocument(newDesc),
+		})
+
+	case overlayActionDelete:
+		a.flash = "Deleting " + issueKey + "..."
+		a.flashIsErr = false
+		return a, a.cmdDeleteIssue(issueKey)
+	}
+
+	return a, nil
 }
 
 // cmdFetchIssue fetches the full issue details for the detail view.
@@ -704,5 +910,91 @@ func (a *App) applyIssueUpdate(issueKey string, updated *jira.Issue) {
 				dv.updateIssue(*updated)
 			}
 		}
+	}
+}
+
+// --- Overlay command functions ---
+
+// cmdFetchTransitions fetches available transitions for an issue.
+func (a App) cmdFetchTransitions(issueKey string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	return func() tea.Msg {
+		transitions, err := client.GetTransitions(context.Background(), issueKey)
+		if err != nil {
+			return transitionsLoadedMsg{issueKey: issueKey, err: fmt.Errorf("get transitions: %w", err)}
+		}
+		return transitionsLoadedMsg{issueKey: issueKey, transitions: transitions}
+	}
+}
+
+// cmdTransitionIssue executes a transition then re-fetches the issue.
+func (a App) cmdTransitionIssue(issueKey, transitionID string) tea.Cmd {
+	client := a.client
+	return func() tea.Msg {
+		ctx := context.Background()
+		if err := client.TransitionIssue(ctx, issueKey, transitionID); err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("transition: %w", err)}
+		}
+		issue, err := client.GetIssue(ctx, issueKey)
+		if err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("refresh: %w", err)}
+		}
+		return issueUpdatedMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// cmdUpdateField updates one or more fields on an issue then re-fetches it.
+func (a App) cmdUpdateField(issueKey string, fields map[string]interface{}) tea.Cmd {
+	client := a.client
+	return func() tea.Msg {
+		ctx := context.Background()
+		if err := client.UpdateIssue(ctx, issueKey, fields); err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("update: %w", err)}
+		}
+		issue, err := client.GetIssue(ctx, issueKey)
+		if err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("refresh: %w", err)}
+		}
+		return issueUpdatedMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// cmdDeleteIssue deletes an issue from Jira.
+func (a App) cmdDeleteIssue(issueKey string) tea.Cmd {
+	client := a.client
+	return func() tea.Msg {
+		if err := client.DeleteIssue(context.Background(), issueKey, false); err != nil {
+			return issueDeletedMsg{issueKey: issueKey, err: fmt.Errorf("delete: %w", err)}
+		}
+		return issueDeletedMsg{issueKey: issueKey}
+	}
+}
+
+// cmdFetchAndCacheUsers fetches all users from Jira and saves them to the cache.
+func (a App) cmdFetchAndCacheUsers() tea.Cmd {
+	client := a.client
+	return func() tea.Msg {
+		ctx := context.Background()
+		users, err := client.SearchAllUsers(ctx)
+		if err != nil {
+			return usersLoadedMsg{err: fmt.Errorf("fetch users: %w", err)}
+		}
+
+		cached := make([]config.CachedUser, len(users))
+		for i, u := range users {
+			cached[i] = config.CachedUser{
+				AccountID:   u.AccountID,
+				DisplayName: u.DisplayName,
+				Email:       u.Email,
+			}
+		}
+
+		// Best-effort save to disk cache
+		_ = config.SaveUserCache(cached)
+
+		return usersLoadedMsg{users: cached}
 	}
 }

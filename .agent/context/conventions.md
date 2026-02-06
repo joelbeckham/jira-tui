@@ -8,7 +8,7 @@
 - **Language:** Go 1.24+
 - **TUI Framework:** Bubbletea v1.3 (github.com/charmbracelet/bubbletea)
 - **Styling:** Lipgloss v1.1 (github.com/charmbracelet/lipgloss)
-- **Components:** Bubbles v0.21 (github.com/charmbracelet/bubbles) — table, textinput
+- **Components:** Bubbles v0.21 (github.com/charmbracelet/bubbles) — table, textinput, textarea, viewport
 - **Config:** YAML via gopkg.in/yaml.v3
 - **Build tool:** `go build` / Makefile
 - **Test framework:** Go built-in (`go test`)
@@ -29,15 +29,17 @@
 cmd/jira-tui/          # Entry point (main.go)
 internal/
   tui/                 # Bubbletea models, views, key handling, styles
-    app.go             # Root model (App), Update, View, key routing
+    app.go             # Root model (App), Update, View, key routing, overlay dispatch
     tab.go             # Tab model, issue-to-row rendering, fieldValue
+    detail.go          # Issue detail view (scrollable viewport)
+    overlay.go         # Overlay system (selection, textinput, textarea, confirm)
+    adf.go             # ADF (Atlassian Document Format) extraction/creation
     filter.go          # Client-side quick filter (issueFilter)
     priority.go        # Priority icon/label mappings
     columns.go         # Auto-proportional column width builder
     styles.go          # All lipgloss styles
-    keymap.go          # (placeholder for future keymap extraction)
   jira/                # Jira REST API client (Cloud v3, Basic Auth)
-  config/              # Config + secrets loading (YAML)
+  config/              # Config + secrets loading (YAML), user cache
 .agent/                # Agent workspace (specs, context, decisions)
 ```
 
