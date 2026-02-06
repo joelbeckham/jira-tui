@@ -74,11 +74,22 @@ type issueDetailView struct {
 	issue    jira.Issue
 	viewport viewport.Model
 	ready    bool
+	loading  bool
 	width    int
 	height   int
 }
 
 func newIssueDetailView(issue jira.Issue, width, height int) issueDetailView {
+	v := issueDetailView{
+		issue:   issue,
+		width:   width,
+		height:  height,
+		loading: true,
+	}
+	return v
+}
+
+func newIssueDetailViewReady(issue jira.Issue, width, height int) issueDetailView {
 	v := issueDetailView{
 		issue:  issue,
 		width:  width,
@@ -240,6 +251,9 @@ func (v *issueDetailView) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the detail view viewport.
 func (v *issueDetailView) View() string {
+	if v.loading {
+		return loadingStyle.Render("Loading " + v.issue.Key + "...")
+	}
 	if !v.ready {
 		return loadingStyle.Render("Loading...")
 	}
@@ -255,11 +269,25 @@ func (v *issueDetailView) setSize(width, height int) {
 	}
 }
 
+// updateIssue replaces the displayed issue and rebuilds the viewport content.
+func (v *issueDetailView) updateIssue(issue jira.Issue) {
+	v.issue = issue
+	if v.ready {
+		v.buildViewport()
+	}
+}
+
 // --- Helpers ---
 
 func renderSection(label string, maxWidth int) string {
-	line := strings.Repeat("─", maxWidth)
-	return detailSectionStyle.Render(fmt.Sprintf("─── %s %s", label, line[:max(0, maxWidth-len(label)-5)])) + "\n"
+	// "─── Label ─────────"
+	// prefix "─── " = 4 display cols, " " after label = 1
+	remaining := maxWidth - 4 - len(label) - 1
+	if remaining < 0 {
+		remaining = 0
+	}
+	tail := strings.Repeat("─", remaining)
+	return detailSectionStyle.Render(fmt.Sprintf("─── %s %s", label, tail)) + "\n"
 }
 
 func renderField(label, value string) string {

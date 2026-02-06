@@ -28,6 +28,27 @@ type tabDataMsg struct {
 	err      error
 }
 
+// issueUpdatedMsg is sent after a successful issue edit (status, assignee, etc.).
+// The handler uses issueKey to update both the tab data and the detail view.
+type issueUpdatedMsg struct {
+	issueKey string
+	issue    *jira.Issue // refreshed issue from API
+	err      error
+}
+
+// flashMsg sets a temporary status message.
+type flashMsg struct {
+	text  string
+	isErr bool
+}
+
+// issueDetailMsg delivers a fully-fetched issue for the detail view.
+type issueDetailMsg struct {
+	issueKey string
+	issue    *jira.Issue
+	err      error
+}
+
 // --- View stack ---
 
 // view is a stacked view that renders on top of the tab bar.
@@ -55,6 +76,9 @@ type App struct {
 	tabs      []tab
 	activeTab int
 	viewStack []view
+
+	flash      string // transient status message
+	flashIsErr bool   // true if the flash is an error
 }
 
 // NewApp creates a new App model.
@@ -184,7 +208,46 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case issueUpdatedMsg:
+		a.flash = ""
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+		} else if msg.issue != nil {
+			a.applyIssueUpdate(msg.issueKey, msg.issue)
+			a.flash = msg.issueKey + " updated"
+			a.flashIsErr = false
+		}
+
+	case flashMsg:
+		a.flash = msg.text
+		a.flashIsErr = msg.isErr
+
+	case issueDetailMsg:
+		if msg.err != nil {
+			a.flash = fmt.Sprintf("Failed to load %s: %v", msg.issueKey, msg.err)
+			a.flashIsErr = true
+			// Still show what we have from the search result
+			if len(a.viewStack) > 0 {
+				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+					if dv.issue.Key == msg.issueKey {
+						dv.loading = false
+						dv.buildViewport()
+					}
+				}
+			}
+		} else if msg.issue != nil && len(a.viewStack) > 0 {
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				if dv.issue.Key == msg.issueKey {
+					dv.issue = *msg.issue
+					dv.loading = false
+					dv.buildViewport()
+				}
+			}
+		}
+
 	case tea.KeyMsg:
+		a.flash = "" // clear flash on any keypress
 		return a.handleKey(msg)
 	}
 	return a, nil
@@ -209,8 +272,12 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.viewStack = a.viewStack[:len(a.viewStack)-1]
 			return a, nil
 		}
-		// Delegate to the top view (e.g., viewport scrolling)
+		// Edit hotkeys on the detail view's issue
 		if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+			if model, cmd, handled := a.handleEditHotkey(msg, &dv.issue); handled {
+				return model, cmd
+			}
+			// Delegate remaining keys to viewport (j/k scrolling, etc.)
 			cmd := dv.Update(msg)
 			return a, cmd
 		}
@@ -250,12 +317,12 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "enter":
-		// Push issue detail onto stack
+		// Push issue detail onto stack and fetch full issue
 		if a.activeTab < len(a.tabs) {
 			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
 				dv := newIssueDetailView(*issue, a.width, a.height)
 				a.viewStack = append(a.viewStack, &dv)
-				return a, nil
+				return a, a.cmdFetchIssue(issue.Key)
 			}
 		}
 
@@ -271,6 +338,14 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	default:
+		// Edit hotkeys on the selected issue in the list
+		if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].state == tabReady {
+			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
+				if model, cmd, handled := a.handleEditHotkey(msg, issue); handled {
+					return model, cmd
+				}
+			}
+		}
 		// Delegate to table for j/k/up/down scrolling
 		if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].state == tabReady {
 			var cmd tea.Cmd
@@ -443,13 +518,191 @@ func (a App) renderStatusBar() string {
 		parts = append(parts, successStyle.Render(a.user.DisplayName))
 	}
 
+	// Flash message (transient feedback)
+	if a.flash != "" {
+		if a.flashIsErr {
+			parts = append(parts, errorStyle.Render(a.flash))
+		} else {
+			parts = append(parts, successStyle.Render(a.flash))
+		}
+	}
+
+	editHints := "s: status  p: priority  d: done  i: assign me  a: assignee  t: title  e: desc  del: delete"
 	if len(a.viewStack) > 0 {
-		parts = append(parts, helpStyle.Render("esc: back  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: scroll  "+editHints+"  esc: back  q: quit"))
 	} else {
-		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  r: refresh  1-9: tabs  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  "+editHints+"  /: filter  r: refresh  1-9: tabs  q: quit"))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		strings.Join(parts, helpStyle.Render("  │  ")),
 	)
+}
+
+// --- Edit hotkeys ---
+
+// editHotkeys is the set of keys that trigger issue editing actions.
+var editHotkeys = map[string]bool{
+	"s": true, "p": true, "d": true, "e": true,
+	"t": true, "i": true, "a": true, "delete": true,
+}
+
+// handleEditHotkey processes edit hotkeys (s/p/d/e/t/i/a/del) for the given
+// target issue. Returns (model, cmd, true) if the key was handled, or
+// (model, nil, false) if it wasn't an edit hotkey.
+func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea.Cmd, bool) {
+	key := msg.String()
+	if !editHotkeys[key] {
+		return a, nil, false
+	}
+
+	if a.client == nil {
+		a.flash = "Not connected to Jira"
+		a.flashIsErr = true
+		return a, nil, true
+	}
+
+	switch key {
+	case "d":
+		// Mark as done — find the "done" category transition and execute immediately
+		a.flash = "Marking " + issue.Key + " as done..."
+		a.flashIsErr = false
+		return a, a.cmdMarkDone(issue.Key), true
+
+	case "i":
+		// Assign to me
+		if a.user == nil {
+			a.flash = "Not logged in"
+			a.flashIsErr = true
+			return a, nil, true
+		}
+		a.flash = "Assigning " + issue.Key + " to you..."
+		a.flashIsErr = false
+		return a, a.cmdAssignToMe(issue.Key, a.user), true
+
+	case "s":
+		a.flash = "Status change not yet implemented (needs overlay)"
+		a.flashIsErr = true
+		return a, nil, true
+
+	case "p":
+		a.flash = "Priority change not yet implemented (needs overlay)"
+		a.flashIsErr = true
+		return a, nil, true
+
+	case "a":
+		a.flash = "Assignee picker not yet implemented (needs overlay)"
+		a.flashIsErr = true
+		return a, nil, true
+
+	case "t":
+		a.flash = "Title edit not yet implemented (needs overlay)"
+		a.flashIsErr = true
+		return a, nil, true
+
+	case "e":
+		a.flash = "Description edit not yet implemented (needs overlay)"
+		a.flashIsErr = true
+		return a, nil, true
+
+	case "delete":
+		a.flash = "Delete not yet implemented (needs confirmation overlay)"
+		a.flashIsErr = true
+		return a, nil, true
+	}
+
+	return a, nil, false
+}
+
+// cmdFetchIssue fetches the full issue details for the detail view.
+func (a App) cmdFetchIssue(issueKey string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	return func() tea.Msg {
+		issue, err := client.GetIssue(context.Background(), issueKey)
+		if err != nil {
+			return issueDetailMsg{issueKey: issueKey, err: err}
+		}
+		return issueDetailMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// cmdMarkDone fetches transitions, finds the "done" category, and executes it.
+func (a App) cmdMarkDone(issueKey string) tea.Cmd {
+	client := a.client
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		transitions, err := client.GetTransitions(ctx, issueKey)
+		if err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("get transitions: %w", err)}
+		}
+
+		// Find a transition whose target status category is "done"
+		var doneTransition *jira.Transition
+		for i, t := range transitions {
+			if t.To != nil && t.To.StatusCategory != nil && t.To.StatusCategory.Key == "done" {
+				doneTransition = &transitions[i]
+				break
+			}
+		}
+		if doneTransition == nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("no 'done' transition available for %s", issueKey)}
+		}
+
+		if err := client.TransitionIssue(ctx, issueKey, doneTransition.ID); err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("transition: %w", err)}
+		}
+
+		// Re-fetch the issue to get the updated state
+		issue, err := client.GetIssue(ctx, issueKey)
+		if err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("refresh: %w", err)}
+		}
+		return issueUpdatedMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// cmdAssignToMe assigns the issue to the current user and re-fetches it.
+func (a App) cmdAssignToMe(issueKey string, user *jira.User) tea.Cmd {
+	client := a.client
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		if err := client.AssignIssue(ctx, issueKey, user.AccountID); err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("assign: %w", err)}
+		}
+
+		issue, err := client.GetIssue(ctx, issueKey)
+		if err != nil {
+			return issueUpdatedMsg{issueKey: issueKey, err: fmt.Errorf("refresh: %w", err)}
+		}
+		return issueUpdatedMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// applyIssueUpdate updates the issue in both the tab data and the detail view.
+func (a *App) applyIssueUpdate(issueKey string, updated *jira.Issue) {
+	// Update in all tabs
+	for ti := range a.tabs {
+		for ii := range a.tabs[ti].issues {
+			if a.tabs[ti].issues[ii].Key == issueKey {
+				a.tabs[ti].issues[ii] = *updated
+				// Re-apply filter and rebuild table rows
+				a.tabs[ti].applyFilter()
+				break
+			}
+		}
+	}
+
+	// Update the detail view if it's on the stack
+	if len(a.viewStack) > 0 {
+		if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+			if dv.issue.Key == issueKey {
+				dv.updateIssue(*updated)
+			}
+		}
+	}
 }

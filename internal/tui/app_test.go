@@ -476,3 +476,263 @@ func TestAppStatusBarShowsFilterHint(t *testing.T) {
 		t.Errorf("expected '/: filter' in status bar, got: %s", view)
 	}
 }
+
+// --- Edit hotkey tests ---
+
+func TestAppStatusBarShowsEditHints(t *testing.T) {
+	app := testAppReady()
+	view := app.View()
+
+	editKeys := []string{"s: status", "p: priority", "d: done", "i: assign me", "t: title", "e: desc"}
+	for _, hint := range editKeys {
+		if !strings.Contains(view, hint) {
+			t.Errorf("expected '%s' in list view status bar, got: %s", hint, view)
+		}
+	}
+}
+
+func TestAppStatusBarShowsEditHintsInDetailView(t *testing.T) {
+	app := testAppReady()
+
+	// Push detail view
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = model.(App)
+
+	view := app.View()
+	editKeys := []string{"s: status", "p: priority", "d: done", "i: assign me", "t: title", "e: desc", "esc: back"}
+	for _, hint := range editKeys {
+		if !strings.Contains(view, hint) {
+			t.Errorf("expected '%s' in detail view status bar, got: %s", hint, view)
+		}
+	}
+}
+
+func TestEditHotkeyNotConnected(t *testing.T) {
+	// App with nil client
+	app := testAppReady()
+
+	// 'd' should show flash error since client is nil
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	updated := model.(App)
+
+	if !updated.flashIsErr {
+		t.Error("expected error flash when not connected")
+	}
+	if !strings.Contains(updated.flash, "Not connected") {
+		t.Errorf("expected 'Not connected' flash, got: %s", updated.flash)
+	}
+}
+
+func TestEditHotkeyIFromDetailView(t *testing.T) {
+	// App with nil client — but we need to test the routing, not the API call
+	app := testAppReady()
+
+	// Push detail view
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = model.(App)
+
+	// 'i' should be handled (not passed to viewport)
+	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	updated := model.(App)
+
+	// With nil client, should show "Not connected"
+	if !updated.flashIsErr {
+		t.Error("expected error flash when client is nil")
+	}
+}
+
+func TestEditHotkeyUnimplementedShowsFlash(t *testing.T) {
+	app := testAppReady()
+	// Give it a fake client so it doesn't hit "not connected"
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	keys := []struct {
+		key      string
+		expected string
+	}{
+		{"s", "not yet implemented"},
+		{"p", "not yet implemented"},
+		{"a", "not yet implemented"},
+		{"t", "not yet implemented"},
+		{"e", "not yet implemented"},
+	}
+
+	for _, tc := range keys {
+		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.key)})
+		updated := model.(App)
+		if !updated.flashIsErr {
+			t.Errorf("key '%s': expected error flash", tc.key)
+		}
+		if !strings.Contains(strings.ToLower(updated.flash), tc.expected) {
+			t.Errorf("key '%s': expected flash containing '%s', got: %s", tc.key, tc.expected, updated.flash)
+		}
+	}
+}
+
+func TestEditHotkeyClearsFlashOnNextKey(t *testing.T) {
+	app := testAppReady()
+	app.flash = "some old message"
+	app.flashIsErr = false
+
+	// Any keypress should clear the flash
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	updated := model.(App)
+
+	if updated.flash != "" {
+		t.Errorf("expected flash to be cleared on keypress, got: %s", updated.flash)
+	}
+}
+
+func TestEditHotkeyNonEditKeyPassesThrough(t *testing.T) {
+	app := testAppReady()
+
+	// 'j' is not an edit hotkey, should pass through to table
+	prevCursor := app.tabs[0].table.Cursor()
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	updated := model.(App)
+
+	// The cursor should have moved (table handled it)
+	if updated.tabs[0].table.Cursor() == prevCursor && len(updated.tabs[0].issues) > 1 {
+		t.Error("expected table cursor to move on 'j' keypress")
+	}
+}
+
+func TestEditHotkeyWorksFromListView(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// 's' from list view should be handled as edit hotkey
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	updated := model.(App)
+
+	if updated.flash == "" {
+		t.Error("expected flash message from edit hotkey in list view")
+	}
+}
+
+func TestEditHotkeyWorksFromDetailView(t *testing.T) {
+	app := testAppReady()
+	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+
+	// Push detail view
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = model.(App)
+
+	// 's' from detail view should be handled
+	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	updated := model.(App)
+
+	if updated.flash == "" {
+		t.Error("expected flash message from edit hotkey in detail view")
+	}
+}
+
+func TestIssueUpdatedMsgSuccess(t *testing.T) {
+	app := testAppReady()
+	updatedIssue := &jira.Issue{
+		Key: "PROJ-1",
+		Fields: jira.IssueFields{
+			Summary: "Fix login page",
+			Status:  &jira.Status{Name: "Done", StatusCategory: &jira.StatusCategory{Key: "done"}},
+		},
+	}
+
+	model, _ := app.Update(issueUpdatedMsg{issueKey: "PROJ-1", issue: updatedIssue})
+	updated := model.(App)
+
+	if !strings.Contains(updated.flash, "PROJ-1 updated") {
+		t.Errorf("expected 'PROJ-1 updated' flash, got: %s", updated.flash)
+	}
+	if updated.flashIsErr {
+		t.Error("expected non-error flash for successful update")
+	}
+
+	// Issue in tab should be updated
+	for _, issue := range updated.tabs[0].issues {
+		if issue.Key == "PROJ-1" {
+			if issue.Fields.Status == nil || issue.Fields.Status.Name != "Done" {
+				t.Error("expected issue status to be updated to Done in tab data")
+			}
+		}
+	}
+}
+
+func TestIssueUpdatedMsgError(t *testing.T) {
+	app := testAppReady()
+
+	model, _ := app.Update(issueUpdatedMsg{issueKey: "PROJ-1", err: fmt.Errorf("transition failed")})
+	updated := model.(App)
+
+	if !strings.Contains(updated.flash, "transition failed") {
+		t.Errorf("expected error in flash, got: %s", updated.flash)
+	}
+	if !updated.flashIsErr {
+		t.Error("expected error flash")
+	}
+}
+
+func TestIssueUpdatedMsgUpdatesDetailView(t *testing.T) {
+	app := testAppReady()
+
+	// Push detail view for PROJ-1
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	app = model.(App)
+
+	updatedIssue := &jira.Issue{
+		Key: "PROJ-1",
+		Fields: jira.IssueFields{
+			Summary: "Fix login page - UPDATED",
+			Status:  &jira.Status{Name: "Done"},
+		},
+	}
+
+	model, _ = app.Update(issueUpdatedMsg{issueKey: "PROJ-1", issue: updatedIssue})
+	updated := model.(App)
+
+	dv := updated.viewStack[0].(*issueDetailView)
+	if dv.issue.Fields.Summary != "Fix login page - UPDATED" {
+		t.Errorf("expected detail view issue to be updated, got: %s", dv.issue.Fields.Summary)
+	}
+}
+
+func TestDetailViewUpdateIssue(t *testing.T) {
+	issue := jira.Issue{Key: "TEST-1", Fields: jira.IssueFields{Summary: "Original"}}
+	dv := newIssueDetailViewReady(issue, 80, 24)
+
+	updated := jira.Issue{Key: "TEST-1", Fields: jira.IssueFields{Summary: "Updated summary"}}
+	dv.updateIssue(updated)
+
+	if dv.issue.Fields.Summary != "Updated summary" {
+		t.Errorf("expected summary to be updated, got: %s", dv.issue.Fields.Summary)
+	}
+	// Viewport content should reflect the update
+	view := dv.View()
+	if !strings.Contains(view, "Updated summary") {
+		t.Error("expected viewport to show updated summary")
+	}
+}
+
+func TestFlashMsgSetsFlash(t *testing.T) {
+	app := testAppReady()
+
+	model, _ := app.Update(flashMsg{text: "hello", isErr: false})
+	updated := model.(App)
+
+	if updated.flash != "hello" {
+		t.Errorf("expected flash 'hello', got: %s", updated.flash)
+	}
+	if updated.flashIsErr {
+		t.Error("expected non-error flash")
+	}
+}
+
+func TestFlashAppearsInStatusBar(t *testing.T) {
+	app := testAppReady()
+	app.flash = "Issue updated"
+	app.flashIsErr = false
+
+	view := app.View()
+	if !strings.Contains(view, "Issue updated") {
+		t.Errorf("expected flash in view, got: %s", view)
+	}
+}

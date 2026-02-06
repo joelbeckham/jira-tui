@@ -29,14 +29,14 @@ func testDetailIssue() jira.Issue {
 }
 
 func TestDetailViewTitle(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	if dv.title() != "TEST-42" {
 		t.Errorf("expected title TEST-42, got %s", dv.title())
 	}
 }
 
 func TestDetailViewRendersKey(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "TEST-42") {
 		t.Error("expected issue key in rendered content")
@@ -44,7 +44,7 @@ func TestDetailViewRendersKey(t *testing.T) {
 }
 
 func TestDetailViewRendersSummary(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "Fix the widget") {
 		t.Error("expected summary in rendered content")
@@ -52,7 +52,7 @@ func TestDetailViewRendersSummary(t *testing.T) {
 }
 
 func TestDetailViewRendersStatus(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "In Progress") {
 		t.Error("expected status in rendered content")
@@ -60,7 +60,7 @@ func TestDetailViewRendersStatus(t *testing.T) {
 }
 
 func TestDetailViewRendersAssignee(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "Alice") {
 		t.Error("expected assignee in rendered content")
@@ -68,7 +68,7 @@ func TestDetailViewRendersAssignee(t *testing.T) {
 }
 
 func TestDetailViewRendersLabels(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "backend, urgent") {
 		t.Error("expected labels in rendered content")
@@ -76,7 +76,7 @@ func TestDetailViewRendersLabels(t *testing.T) {
 }
 
 func TestDetailViewRendersReporter(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "Bob") {
 		t.Error("expected reporter in rendered content")
@@ -84,7 +84,7 @@ func TestDetailViewRendersReporter(t *testing.T) {
 }
 
 func TestDetailViewRendersPriority(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "High") {
 		t.Error("expected priority in rendered content")
@@ -92,7 +92,7 @@ func TestDetailViewRendersPriority(t *testing.T) {
 }
 
 func TestDetailViewRendersType(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "Bug") {
 		t.Error("expected issue type in rendered content")
@@ -100,7 +100,7 @@ func TestDetailViewRendersType(t *testing.T) {
 }
 
 func TestDetailViewRendersProject(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "Test Project") {
 		t.Error("expected project name in rendered content")
@@ -108,7 +108,7 @@ func TestDetailViewRendersProject(t *testing.T) {
 }
 
 func TestDetailViewRendersCreatedDate(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "2025-01-15 10:30") {
 		t.Error("expected formatted created date in rendered content")
@@ -132,7 +132,7 @@ func TestDetailViewRendersDescription(t *testing.T) {
 			},
 		},
 	}
-	dv := newIssueDetailView(issue, 80, 24)
+	dv := newIssueDetailViewReady(issue, 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "The widget is broken") {
 		t.Error("expected description text in rendered content")
@@ -157,7 +157,7 @@ func TestDetailViewRendersSubtasks(t *testing.T) {
 			},
 		},
 	}
-	dv := newIssueDetailView(issue, 80, 24)
+	dv := newIssueDetailViewReady(issue, 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "TEST-43") {
 		t.Error("expected subtask key TEST-43")
@@ -191,7 +191,7 @@ func TestDetailViewRendersLinkedIssues(t *testing.T) {
 			},
 		},
 	}
-	dv := newIssueDetailView(issue, 80, 24)
+	dv := newIssueDetailViewReady(issue, 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "TEST-50") {
 		t.Error("expected outward linked issue key")
@@ -213,7 +213,7 @@ func TestDetailViewRendersParent(t *testing.T) {
 		Key:    "TEST-10",
 		Fields: &jira.IssueFields{Summary: "Parent epic"},
 	}
-	dv := newIssueDetailView(issue, 80, 24)
+	dv := newIssueDetailViewReady(issue, 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "TEST-10") {
 		t.Error("expected parent key in rendered content")
@@ -226,7 +226,7 @@ func TestDetailViewRendersParent(t *testing.T) {
 func TestDetailViewNoLabels(t *testing.T) {
 	issue := testDetailIssue()
 	issue.Fields.Labels = nil
-	dv := newIssueDetailView(issue, 80, 24)
+	dv := newIssueDetailViewReady(issue, 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "None") {
 		t.Error("expected 'None' when no labels")
@@ -236,7 +236,7 @@ func TestDetailViewNoLabels(t *testing.T) {
 func TestDetailViewUnassigned(t *testing.T) {
 	issue := testDetailIssue()
 	issue.Fields.Assignee = nil
-	dv := newIssueDetailView(issue, 80, 24)
+	dv := newIssueDetailViewReady(issue, 80, 24)
 	content := dv.renderContent()
 	if !strings.Contains(content, "Unassigned") {
 		t.Error("expected 'Unassigned' when no assignee")
@@ -247,7 +247,7 @@ func TestDetailViewViewportScrolling(t *testing.T) {
 	issue := testDetailIssue()
 	// Make content long enough to need scrolling
 	issue.Fields.Description = "Line one\nLine two\nLine three\nLine four"
-	dv := newIssueDetailView(issue, 80, 10) // small height to force scroll
+	dv := newIssueDetailViewReady(issue, 80, 10) // small height to force scroll
 	if !dv.ready {
 		t.Fatal("expected viewport to be ready")
 	}
@@ -257,7 +257,7 @@ func TestDetailViewViewportScrolling(t *testing.T) {
 }
 
 func TestDetailViewSetSize(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	dv.setSize(120, 40)
 	if dv.width != 120 || dv.height != 40 {
 		t.Errorf("expected 120x40, got %dx%d", dv.width, dv.height)
@@ -268,7 +268,7 @@ func TestDetailViewSetSize(t *testing.T) {
 }
 
 func TestDetailViewViewOutput(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	output := dv.View()
 	if output == "" {
 		t.Error("expected non-empty view output")
@@ -307,7 +307,7 @@ func TestStatusColor(t *testing.T) {
 }
 
 func TestDetailViewImplementsViewInterface(t *testing.T) {
-	dv := newIssueDetailView(testDetailIssue(), 80, 24)
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
 	var v view = &dv
 	if v.title() != "TEST-42" {
 		t.Error("expected view interface to work")
