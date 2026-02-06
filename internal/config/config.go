@@ -20,9 +20,10 @@ type Config struct {
 // Connection details live in config.yaml; credentials live in a separate
 // secrets.yaml file that is gitignored.
 type JiraConfig struct {
-	BaseURL  string `yaml:"base_url"`
-	Email    string `yaml:"email"`
-	APIToken string `yaml:"api_token"` // loaded from secrets file, not config
+	BaseURL        string `yaml:"base_url"`
+	Email          string `yaml:"email"`
+	APIToken       string `yaml:"api_token"` // loaded from secrets file, not config
+	DefaultProject string `yaml:"default_project,omitempty"`
 }
 
 // SecretsConfig holds sensitive credentials loaded from a separate file.

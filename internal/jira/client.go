@@ -139,3 +139,148 @@ func (c *Client) SearchIssues(ctx context.Context, opts SearchOptions) (*SearchR
 	}
 	return &result, nil
 }
+
+// GetIssue returns the full details for a single issue by key or ID.
+func (c *Client) GetIssue(ctx context.Context, issueKeyOrID string) (*Issue, error) {
+	path := fmt.Sprintf("/rest/api/3/issue/%s", issueKeyOrID)
+	data, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting issue %s: %w", issueKeyOrID, err)
+	}
+	var issue Issue
+	if err := json.Unmarshal(data, &issue); err != nil {
+		return nil, fmt.Errorf("parsing issue: %w", err)
+	}
+	return &issue, nil
+}
+
+// UpdateIssue updates an issue's fields (summary, description, priority, etc.).
+func (c *Client) UpdateIssue(ctx context.Context, issueKeyOrID string, fields map[string]interface{}) error {
+	body := map[string]interface{}{
+		"fields": fields,
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshaling update: %w", err)
+	}
+	path := fmt.Sprintf("/rest/api/3/issue/%s", issueKeyOrID)
+	_, err = c.do(ctx, http.MethodPut, path, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("updating issue %s: %w", issueKeyOrID, err)
+	}
+	return nil
+}
+
+// CreateIssue creates a new issue and returns the created issue reference.
+func (c *Client) CreateIssue(ctx context.Context, req CreateIssueRequest) (*CreateIssueResponse, error) {
+	jsonBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling create request: %w", err)
+	}
+	data, err := c.do(ctx, http.MethodPost, "/rest/api/3/issue", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("creating issue: %w", err)
+	}
+	var resp CreateIssueResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("parsing create response: %w", err)
+	}
+	return &resp, nil
+}
+
+// DeleteIssue deletes an issue, optionally cascading to subtasks.
+func (c *Client) DeleteIssue(ctx context.Context, issueKeyOrID string, deleteSubtasks bool) error {
+	path := fmt.Sprintf("/rest/api/3/issue/%s", issueKeyOrID)
+	if deleteSubtasks {
+		path += "?deleteSubtasks=true"
+	}
+	_, err := c.do(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return fmt.Errorf("deleting issue %s: %w", issueKeyOrID, err)
+	}
+	return nil
+}
+
+// GetTransitions returns the available transitions for an issue.
+func (c *Client) GetTransitions(ctx context.Context, issueKeyOrID string) ([]Transition, error) {
+	path := fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKeyOrID)
+	data, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting transitions for %s: %w", issueKeyOrID, err)
+	}
+	var resp TransitionsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("parsing transitions: %w", err)
+	}
+	return resp.Transitions, nil
+}
+
+// TransitionIssue executes a workflow transition on an issue.
+func (c *Client) TransitionIssue(ctx context.Context, issueKeyOrID, transitionID string) error {
+	body := map[string]interface{}{
+		"transition": map[string]string{
+			"id": transitionID,
+		},
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshaling transition: %w", err)
+	}
+	path := fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKeyOrID)
+	_, err = c.do(ctx, http.MethodPost, path, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("transitioning issue %s: %w", issueKeyOrID, err)
+	}
+	return nil
+}
+
+// AssignIssue assigns an issue to a user by account ID.
+// Pass an empty accountID to unassign.
+func (c *Client) AssignIssue(ctx context.Context, issueKeyOrID, accountID string) error {
+	body := map[string]interface{}{
+		"accountId": accountID,
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshaling assign: %w", err)
+	}
+	path := fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKeyOrID)
+	_, err = c.do(ctx, http.MethodPut, path, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("assigning issue %s: %w", issueKeyOrID, err)
+	}
+	return nil
+}
+
+// SearchAllUsers fetches all active users from the instance.
+// The Jira API returns users in pages; this method paginates through all results.
+func (c *Client) SearchAllUsers(ctx context.Context) ([]User, error) {
+	var all []User
+	startAt := 0
+	maxResults := 1000
+
+	for {
+		path := fmt.Sprintf("/rest/api/3/users/search?startAt=%d&maxResults=%d", startAt, maxResults)
+		data, err := c.do(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("searching users (startAt=%d): %w", startAt, err)
+		}
+		var page []User
+		if err := json.Unmarshal(data, &page); err != nil {
+			return nil, fmt.Errorf("parsing users: %w", err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		for _, u := range page {
+			if u.Active {
+				all = append(all, u)
+			}
+		}
+		if len(page) < maxResults {
+			break
+		}
+		startAt += len(page)
+	}
+	return all, nil
+}

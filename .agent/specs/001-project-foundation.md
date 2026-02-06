@@ -41,7 +41,7 @@ for managing day-to-day Jira work. Built in Go with Bubbletea.
 
 ## Technical Notes
 
-- Use Go 1.21+ for modern features
+- Use Go 1.26+ for modern features
 - `internal/` directory enforces package encapsulation
 - Bubbletea Elm Architecture: Model → Update → View
 - Config location: `~/.config/jira-tui/config.yaml`

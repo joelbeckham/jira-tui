@@ -36,14 +36,7 @@ type view interface {
 	title() string
 }
 
-// issueDetailView is a stub detail view for a single issue.
-type issueDetailView struct {
-	issue jira.Issue
-}
 
-func (v issueDetailView) title() string {
-	return v.issue.Key
-}
 
 // --- App model ---
 
@@ -160,6 +153,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i := range a.tabs {
 			a.tabs[i].setSize(a.width, tableH)
 		}
+		// Resize detail view if on stack
+		if len(a.viewStack) > 0 {
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				dv.setSize(a.width, a.height)
+			}
+		}
 
 	case connStatusMsg:
 		a.checking = false
@@ -210,6 +209,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.viewStack = a.viewStack[:len(a.viewStack)-1]
 			return a, nil
 		}
+		// Delegate to the top view (e.g., viewport scrolling)
+		if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+			cmd := dv.Update(msg)
+			return a, cmd
+		}
 		return a, nil
 	}
 
@@ -249,7 +253,8 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Push issue detail onto stack
 		if a.activeTab < len(a.tabs) {
 			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
-				a.viewStack = append(a.viewStack, issueDetailView{issue: *issue})
+				dv := newIssueDetailView(*issue, a.width, a.height)
+				a.viewStack = append(a.viewStack, &dv)
 				return a, nil
 			}
 		}
@@ -424,25 +429,8 @@ func (a App) renderStackView() string {
 	top := a.viewStack[len(a.viewStack)-1]
 
 	switch v := top.(type) {
-	case issueDetailView:
-		// Stub: show issue key and summary
-		var b strings.Builder
-		b.WriteString(titleStyle.Render(v.issue.Key))
-		b.WriteString("\n")
-		b.WriteString(v.issue.Fields.Summary)
-		b.WriteString("\n\n")
-		if v.issue.Fields.Status != nil {
-			b.WriteString(fmt.Sprintf("Status: %s\n", v.issue.Fields.Status.Name))
-		}
-		if v.issue.Fields.Assignee != nil {
-			b.WriteString(fmt.Sprintf("Assignee: %s\n", v.issue.Fields.Assignee.DisplayName))
-		}
-		if v.issue.Fields.Priority != nil {
-			b.WriteString(fmt.Sprintf("Priority: %s\n", priorityLabel(v.issue.Fields.Priority.Name)))
-		}
-		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("esc: back"))
-		return b.String()
+	case *issueDetailView:
+		return v.View()
 	}
 	return ""
 }

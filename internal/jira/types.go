@@ -18,16 +18,43 @@ type Issue struct {
 
 // IssueFields contains the fields of a Jira issue.
 type IssueFields struct {
-	Summary     string  `json:"summary"`
-	Description string  `json:"description"`
-	Status      *Status `json:"status"`
-	Assignee    *User   `json:"assignee"`
-	Reporter    *User   `json:"reporter"`
-	Priority    *Named  `json:"priority"`
-	IssueType   *Named  `json:"issuetype"`
-	Project     *Named  `json:"project"`
-	Created     string  `json:"created"`
-	Updated     string  `json:"updated"`
+	Summary     string       `json:"summary"`
+	Description interface{}  `json:"description"` // ADF document (map) or string
+	Status      *Status      `json:"status"`
+	Assignee    *User        `json:"assignee"`
+	Reporter    *User        `json:"reporter"`
+	Priority    *Named       `json:"priority"`
+	IssueType   *Named       `json:"issuetype"`
+	Project     *Named       `json:"project"`
+	Created     string       `json:"created"`
+	Updated     string       `json:"updated"`
+	Labels      []string     `json:"labels"`
+	Subtasks    []Issue      `json:"subtasks"`
+	IssueLinks  []IssueLink  `json:"issuelinks"`
+	Parent      *ParentIssue `json:"parent"`
+}
+
+// ParentIssue is a minimal issue reference for the parent field.
+type ParentIssue struct {
+	ID     string       `json:"id"`
+	Key    string       `json:"key"`
+	Fields *IssueFields `json:"fields,omitempty"`
+}
+
+// IssueLink represents a link between two issues.
+type IssueLink struct {
+	ID           string   `json:"id"`
+	Type         LinkType `json:"type"`
+	InwardIssue  *Issue   `json:"inwardIssue,omitempty"`
+	OutwardIssue *Issue   `json:"outwardIssue,omitempty"`
+}
+
+// LinkType describes the type of issue link.
+type LinkType struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Inward  string `json:"inward"`
+	Outward string `json:"outward"`
 }
 
 // Status represents a Jira status.
@@ -90,4 +117,28 @@ type SearchOptions struct {
 	Fields        []string
 	MaxResults    int
 	NextPageToken string
+}
+
+// Transition represents an available workflow transition.
+type Transition struct {
+	ID   string  `json:"id"`
+	Name string  `json:"name"`
+	To   *Status `json:"to"`
+}
+
+// TransitionsResponse wraps the list returned by GET transitions.
+type TransitionsResponse struct {
+	Transitions []Transition `json:"transitions"`
+}
+
+// CreateIssueRequest is the body for POST /rest/api/3/issue.
+type CreateIssueRequest struct {
+	Fields map[string]interface{} `json:"fields"`
+}
+
+// CreateIssueResponse is the response from POST /rest/api/3/issue.
+type CreateIssueResponse struct {
+	ID   string `json:"id"`
+	Key  string `json:"key"`
+	Self string `json:"self"`
 }

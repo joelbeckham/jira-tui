@@ -260,9 +260,9 @@ func TestAppIssueDetailPushPop(t *testing.T) {
 	if len(app.viewStack) != 1 {
 		t.Fatalf("expected viewStack length 1, got %d", len(app.viewStack))
 	}
-	detail, ok := app.viewStack[0].(issueDetailView)
+	detail, ok := app.viewStack[0].(*issueDetailView)
 	if !ok {
-		t.Fatalf("expected issueDetailView on stack, got %T", app.viewStack[0])
+		t.Fatalf("expected *issueDetailView on stack, got %T", app.viewStack[0])
 	}
 	if detail.issue.Key != "PROJ-1" {
 		t.Errorf("expected PROJ-1, got %s", detail.issue.Key)

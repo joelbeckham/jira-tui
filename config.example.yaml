@@ -19,5 +19,3 @@ tabs:
     columns: [key, summary, status, assignee, reporter]
     sort: created
 
-cache:
-  ttl: 5m

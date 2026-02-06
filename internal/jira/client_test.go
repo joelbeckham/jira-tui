@@ -203,3 +203,302 @@ func TestSearchIssuesDefaultMaxResults(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestGetIssue(t *testing.T) {
+	expected := Issue{
+		ID:  "10001",
+		Key: "PROJ-1",
+		Fields: IssueFields{
+			Summary: "Test issue",
+			Labels:  []string{"bug", "urgent"},
+			Subtasks: []Issue{
+				{ID: "10002", Key: "PROJ-2", Fields: IssueFields{Summary: "Subtask"}},
+			},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue/PROJ-1" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(expected)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	issue, err := c.GetIssue(context.Background(), "PROJ-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if issue.Key != "PROJ-1" {
+		t.Errorf("expected PROJ-1, got %s", issue.Key)
+	}
+	if issue.Fields.Summary != "Test issue" {
+		t.Errorf("expected summary 'Test issue', got %s", issue.Fields.Summary)
+	}
+	if len(issue.Fields.Labels) != 2 {
+		t.Errorf("expected 2 labels, got %d", len(issue.Fields.Labels))
+	}
+	if len(issue.Fields.Subtasks) != 1 {
+		t.Errorf("expected 1 subtask, got %d", len(issue.Fields.Subtasks))
+	}
+}
+
+func TestUpdateIssue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue/PROJ-1" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPut {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		fields, ok := body["fields"].(map[string]interface{})
+		if !ok {
+			t.Fatal("expected fields in body")
+		}
+		if fields["summary"] != "Updated title" {
+			t.Errorf("expected updated title, got %v", fields["summary"])
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	err := c.UpdateIssue(context.Background(), "PROJ-1", map[string]interface{}{
+		"summary": "Updated title",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCreateIssue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		var body CreateIssueRequest
+		json.NewDecoder(r.Body).Decode(&body)
+		if body.Fields["summary"] != "New issue" {
+			t.Errorf("expected summary 'New issue', got %v", body.Fields["summary"])
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(CreateIssueResponse{
+			ID:   "10099",
+			Key:  "PROJ-99",
+			Self: "https://example.atlassian.net/rest/api/3/issue/10099",
+		})
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	resp, err := c.CreateIssue(context.Background(), CreateIssueRequest{
+		Fields: map[string]interface{}{
+			"summary":   "New issue",
+			"project":   map[string]string{"key": "PROJ"},
+			"issuetype": map[string]string{"name": "Task"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Key != "PROJ-99" {
+		t.Errorf("expected PROJ-99, got %s", resp.Key)
+	}
+}
+
+func TestDeleteIssue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue/PROJ-1" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Query().Get("deleteSubtasks") != "true" {
+			t.Error("expected deleteSubtasks=true")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	err := c.DeleteIssue(context.Background(), "PROJ-1", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDeleteIssueNoSubtasks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("deleteSubtasks") == "true" {
+			t.Error("did not expect deleteSubtasks=true")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	err := c.DeleteIssue(context.Background(), "PROJ-1", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetTransitions(t *testing.T) {
+	expected := TransitionsResponse{
+		Transitions: []Transition{
+			{
+				ID:   "11",
+				Name: "In Progress",
+				To: &Status{
+					Name:           "In Progress",
+					ID:             "3",
+					StatusCategory: &StatusCategory{ID: 4, Key: "indeterminate", Name: "In Progress"},
+				},
+			},
+			{
+				ID:   "21",
+				Name: "Done",
+				To: &Status{
+					Name:           "Done",
+					ID:             "5",
+					StatusCategory: &StatusCategory{ID: 3, Key: "done", Name: "Done"},
+				},
+			},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue/PROJ-1/transitions" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(expected)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	transitions, err := c.GetTransitions(context.Background(), "PROJ-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(transitions) != 2 {
+		t.Fatalf("expected 2 transitions, got %d", len(transitions))
+	}
+	if transitions[0].Name != "In Progress" {
+		t.Errorf("expected 'In Progress', got %s", transitions[0].Name)
+	}
+	if transitions[1].To.StatusCategory.Key != "done" {
+		t.Errorf("expected done category, got %s", transitions[1].To.StatusCategory.Key)
+	}
+}
+
+func TestTransitionIssue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue/PROJ-1/transitions" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		transition, ok := body["transition"].(map[string]interface{})
+		if !ok {
+			t.Fatal("expected transition in body")
+		}
+		if transition["id"] != "21" {
+			t.Errorf("expected transition id '21', got %v", transition["id"])
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	err := c.TransitionIssue(context.Background(), "PROJ-1", "21")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAssignIssue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/issue/PROJ-1/assignee" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPut {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["accountId"] != "abc123" {
+			t.Errorf("expected accountId 'abc123', got %v", body["accountId"])
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	err := c.AssignIssue(context.Background(), "PROJ-1", "abc123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSearchAllUsers(t *testing.T) {
+	// Return a mix of active and inactive users
+	allUsers := []User{
+		{AccountID: "u1", DisplayName: "Active User", Active: true},
+		{AccountID: "u2", DisplayName: "Inactive User", Active: false},
+		{AccountID: "u3", DisplayName: "Another Active", Active: true},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/users/search" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(allUsers)
+	}))
+	defer server.Close()
+
+	c := NewClient(server.URL, "test@example.com", "token")
+	users, err := c.SearchAllUsers(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should only return active users
+	if len(users) != 2 {
+		t.Fatalf("expected 2 active users, got %d", len(users))
+	}
+	if users[0].AccountID != "u1" {
+		t.Errorf("expected u1, got %s", users[0].AccountID)
+	}
+	if users[1].AccountID != "u3" {
+		t.Errorf("expected u3, got %s", users[1].AccountID)
+	}
+}
