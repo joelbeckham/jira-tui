@@ -12,20 +12,20 @@ func TestPriorityIconKnown(t *testing.T) {
 	}{
 		{"Blocked", "⊘"},
 		{"Blocker", "⊘"},
-		{"Critical", "⏶⏶"},
-		{"Highest", "⏶⏶"},
-		{"High", "⏶"},
+		{"Critical", "↑↑"},
+		{"Highest", "↑↑"},
+		{"High", "↑"},
 		{"Medium", "≡"},
-		{"Medium-Rare", "⏷"},
-		{"Low", "⏷⏷"},
-		{"Lowest", "⏷⏷"},
+		{"Medium-Rare", "↓"},
+		{"Low", "↓↓"},
+		{"Lowest", "↓↓"},
 	}
 
 	for _, tt := range tests {
 		got := priorityIcon(tt.name)
-		// The result includes ANSI color codes, so check that the icon substring is present
-		if !strings.Contains(got, tt.wantIcon) {
-			t.Errorf("priorityIcon(%q) = %q, want icon %q", tt.name, got, tt.wantIcon)
+		// priorityIcon returns plain text (no ANSI codes) for safe use in table cells
+		if got != tt.wantIcon {
+			t.Errorf("priorityIcon(%q) = %q, want %q", tt.name, got, tt.wantIcon)
 		}
 	}
 }
@@ -40,7 +40,7 @@ func TestPriorityIconUnknown(t *testing.T) {
 func TestPriorityLabelKnown(t *testing.T) {
 	got := priorityLabel("High")
 	// Should contain both the icon and the text name
-	if !strings.Contains(got, "⏶") {
+	if !strings.Contains(got, "↑") {
 		t.Errorf("priorityLabel(High) missing icon, got: %q", got)
 	}
 	if !strings.Contains(got, "High") {
