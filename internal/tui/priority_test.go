@@ -37,6 +37,13 @@ func TestPriorityIconUnknown(t *testing.T) {
 	}
 }
 
+func TestPriorityIconNotPrioritizedBlank(t *testing.T) {
+	got := priorityIcon("Not Prioritized")
+	if got != "" {
+		t.Errorf("priorityIcon(Not Prioritized) = %q, want blank", got)
+	}
+}
+
 func TestPriorityLabelKnown(t *testing.T) {
 	got := priorityLabel("High")
 	// Should contain both the icon and the text name

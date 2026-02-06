@@ -26,8 +26,11 @@ var priorityMap = map[string]priorityDef{
 // priorityIcon returns a plain icon string for the given priority name.
 // Returns the icon WITHOUT ANSI styling because the bubbles table component
 // uses runewidth.Truncate internally, which mangles embedded ANSI escape codes.
-// Falls back to the raw name if the priority is unknown.
+// Returns blank for "Not Prioritized". Falls back to the raw name if unknown.
 func priorityIcon(name string) string {
+	if name == "Not Prioritized" {
+		return ""
+	}
 	if def, ok := priorityMap[name]; ok {
 		return def.icon
 	}
