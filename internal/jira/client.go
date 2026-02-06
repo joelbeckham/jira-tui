@@ -2,6 +2,7 @@
 package jira
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -87,4 +88,51 @@ func (c *Client) GetMyself(ctx context.Context) (*User, error) {
 		return nil, fmt.Errorf("parsing user: %w", err)
 	}
 	return &user, nil
+}
+
+// GetFilter returns a saved Jira filter by ID.
+func (c *Client) GetFilter(ctx context.Context, filterID string) (*Filter, error) {
+	path := fmt.Sprintf("/rest/api/3/filter/%s", filterID)
+	data, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting filter %s: %w", filterID, err)
+	}
+
+	var filter Filter
+	if err := json.Unmarshal(data, &filter); err != nil {
+		return nil, fmt.Errorf("parsing filter: %w", err)
+	}
+	return &filter, nil
+}
+
+// SearchIssues performs a JQL search and returns matching issues.
+func (c *Client) SearchIssues(ctx context.Context, opts SearchOptions) (*SearchResult, error) {
+	if opts.MaxResults == 0 {
+		opts.MaxResults = 50
+	}
+
+	body := map[string]interface{}{
+		"jql":        opts.JQL,
+		"startAt":    opts.StartAt,
+		"maxResults": opts.MaxResults,
+	}
+	if len(opts.Fields) > 0 {
+		body["fields"] = opts.Fields
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling search request: %w", err)
+	}
+
+	data, err := c.do(ctx, http.MethodPost, "/rest/api/3/search", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("searching issues: %w", err)
+	}
+
+	var result SearchResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("parsing search results: %w", err)
+	}
+	return &result, nil
 }

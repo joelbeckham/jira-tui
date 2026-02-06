@@ -50,6 +50,17 @@ type Named struct {
 	Name string `json:"name"`
 }
 
+// Filter represents a saved Jira filter.
+type Filter struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	JQL         string `json:"jql"`
+	ViewURL     string `json:"viewUrl"`
+	SearchURL   string `json:"searchUrl"`
+	Favourite   bool   `json:"favourite"`
+}
+
 // Board represents a Jira board.
 type Board struct {
 	ID   int    `json:"id"`
@@ -71,4 +82,12 @@ type SearchResult struct {
 	MaxResults int     `json:"maxResults"`
 	Total      int     `json:"total"`
 	Issues     []Issue `json:"issues"`
+}
+
+// SearchOptions configures a JQL search request.
+type SearchOptions struct {
+	JQL        string
+	Fields     []string
+	StartAt    int
+	MaxResults int
 }
