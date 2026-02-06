@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jbeckham/jira-tui/internal/config"
@@ -149,6 +150,30 @@ func TestIssuesToRows(t *testing.T) {
 	}
 	if rows[0][2] != "In Progress" {
 		t.Errorf("expected row[0][2]='In Progress', got %q", rows[0][2])
+	}
+}
+
+func TestIssuesToRowsPriorityUsesIcon(t *testing.T) {
+	cols := []string{"key", "priority"}
+	issues := []jira.Issue{
+		{
+			Key: "P-1",
+			Fields: jira.IssueFields{
+				Priority: &jira.Named{Name: "High"},
+			},
+		},
+	}
+	rows := issuesToRows(issues, cols)
+
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	// Priority column should contain the icon (with ANSI codes), not plain "High"
+	if rows[0][1] == "High" {
+		t.Error("expected priority to use icon, but got plain text 'High'")
+	}
+	if !strings.Contains(rows[0][1], "⏶") {
+		t.Errorf("expected priority icon ⏶ in row, got %q", rows[0][1])
 	}
 }
 

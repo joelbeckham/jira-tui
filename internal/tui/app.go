@@ -438,7 +438,7 @@ func (a App) renderStackView() string {
 			b.WriteString(fmt.Sprintf("Assignee: %s\n", v.issue.Fields.Assignee.DisplayName))
 		}
 		if v.issue.Fields.Priority != nil {
-			b.WriteString(fmt.Sprintf("Priority: %s\n", v.issue.Fields.Priority.Name))
+			b.WriteString(fmt.Sprintf("Priority: %s\n", priorityLabel(v.issue.Fields.Priority.Name)))
 		}
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("esc: back"))

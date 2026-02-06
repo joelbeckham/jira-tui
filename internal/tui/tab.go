@@ -117,12 +117,17 @@ func (t *tab) clearFilter() {
 }
 
 // issuesToRows converts issues to table rows based on the configured columns.
+// Priority columns display a colored icon instead of text.
 func issuesToRows(issues []jira.Issue, columns []string) []table.Row {
 	rows := make([]table.Row, len(issues))
 	for i, issue := range issues {
 		row := make(table.Row, len(columns))
 		for j, col := range columns {
-			row[j] = fieldValue(issue, col)
+			if col == "priority" && issue.Fields.Priority != nil {
+				row[j] = priorityIcon(issue.Fields.Priority.Name)
+			} else {
+				row[j] = fieldValue(issue, col)
+			}
 		}
 		rows[i] = row
 	}
