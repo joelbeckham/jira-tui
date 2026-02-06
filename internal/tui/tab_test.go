@@ -219,3 +219,138 @@ func TestFormatDate(t *testing.T) {
 		}
 	}
 }
+
+// --- Quick filter tests ---
+
+func TestTabApplyFilter(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Filter",
+		FilterID: "1",
+		Columns:  []string{"key", "summary", "status"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(100, 20)
+
+	issues := []jira.Issue{
+		{Key: "F-1", Fields: jira.IssueFields{Summary: "Fix login", Status: &jira.Status{Name: "Open"}}},
+		{Key: "F-2", Fields: jira.IssueFields{Summary: "Add dashboard", Status: &jira.Status{Name: "Done"}}},
+		{Key: "F-3", Fields: jira.IssueFields{Summary: "Fix logout", Status: &jira.Status{Name: "Open"}}},
+	}
+	tab.setIssues(issues)
+
+	// Activate filter and type "login"
+	tab.quickFilter.activate()
+	tab.quickFilter.input.SetValue("login")
+	tab.quickFilter.apply(tab.issues, tab.columns)
+	tab.applyFilter()
+
+	// Table should now show only 1 row
+	rows := tab.table.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row after filter, got %d", len(rows))
+	}
+	if rows[0][0] != "F-1" {
+		t.Errorf("expected F-1, got %s", rows[0][0])
+	}
+}
+
+func TestTabClearFilter(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Clear",
+		FilterID: "1",
+		Columns:  []string{"key", "summary"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(100, 20)
+
+	issues := []jira.Issue{
+		{Key: "C-1", Fields: jira.IssueFields{Summary: "One"}},
+		{Key: "C-2", Fields: jira.IssueFields{Summary: "Two"}},
+	}
+	tab.setIssues(issues)
+
+	// Apply a filter
+	tab.quickFilter.activate()
+	tab.quickFilter.input.SetValue("One")
+	tab.quickFilter.apply(tab.issues, tab.columns)
+	tab.applyFilter()
+
+	if len(tab.table.Rows()) != 1 {
+		t.Fatalf("expected 1 row after filter, got %d", len(tab.table.Rows()))
+	}
+
+	// Clear the filter
+	tab.clearFilter()
+
+	if len(tab.table.Rows()) != 2 {
+		t.Errorf("expected 2 rows after clear, got %d", len(tab.table.Rows()))
+	}
+	if tab.quickFilter.isActive() {
+		t.Error("expected filter to be inactive after clear")
+	}
+}
+
+func TestTabSelectedIssueWithFilter(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "SelF",
+		FilterID: "1",
+		Columns:  []string{"key", "summary"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(100, 20)
+
+	issues := []jira.Issue{
+		{Key: "S-1", Fields: jira.IssueFields{Summary: "Alpha"}},
+		{Key: "S-2", Fields: jira.IssueFields{Summary: "Beta"}},
+		{Key: "S-3", Fields: jira.IssueFields{Summary: "Alpha two"}},
+	}
+	tab.setIssues(issues)
+
+	// Filter to "Alpha" — should match S-1 and S-3
+	tab.quickFilter.activate()
+	tab.quickFilter.input.SetValue("Alpha")
+	tab.quickFilter.apply(tab.issues, tab.columns)
+	tab.applyFilter()
+
+	selected := tab.selectedIssue()
+	if selected == nil {
+		t.Fatal("expected selected issue, got nil")
+	}
+	if selected.Key != "S-1" {
+		t.Errorf("expected S-1 as first filtered result, got %s", selected.Key)
+	}
+}
+
+func TestTabSetIssuesClearsFilter(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Refresh",
+		FilterID: "1",
+		Columns:  []string{"key", "summary"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(100, 20)
+
+	issues := []jira.Issue{
+		{Key: "R-1", Fields: jira.IssueFields{Summary: "One"}},
+		{Key: "R-2", Fields: jira.IssueFields{Summary: "Two"}},
+	}
+	tab.setIssues(issues)
+
+	// Activate and apply a filter
+	tab.quickFilter.activate()
+	tab.quickFilter.input.SetValue("One")
+	tab.quickFilter.apply(tab.issues, tab.columns)
+
+	// Reload issues (simulates data refresh)
+	newIssues := []jira.Issue{
+		{Key: "R-3", Fields: jira.IssueFields{Summary: "Three"}},
+	}
+	tab.setIssues(newIssues)
+
+	if tab.quickFilter.isActive() {
+		t.Error("expected filter to be cleared after setIssues")
+	}
+	if len(tab.issues) != 1 {
+		t.Errorf("expected 1 issue, got %d", len(tab.issues))
+	}
+}

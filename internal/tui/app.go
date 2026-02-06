@@ -176,7 +176,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.tabIndex >= 0 && msg.tabIndex < len(a.tabs) {
 			tab := &a.tabs[msg.tabIndex]
 			if msg.filter != nil {
-				tab.filter = msg.filter
+				tab.jiraFilter = msg.filter
 			}
 			if msg.err != nil {
 				tab.setError(msg.err.Error())
@@ -195,15 +195,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	// Global keys
+	// Global keys always work
 	switch key {
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		return a, tea.Quit
 	}
 
 	// If a view is on the stack, handle stack-specific keys
 	if len(a.viewStack) > 0 {
 		switch key {
+		case "q":
+			return a, tea.Quit
 		case "esc":
 			a.viewStack = a.viewStack[:len(a.viewStack)-1]
 			return a, nil
@@ -211,11 +213,30 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Tab-level keys (no stack views open)
+	// If filter input is focused, route keypresses to the text input
+	if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].quickFilter.isFocused() {
+		return a.handleFilterKey(msg)
+	}
+
+	// Tab-level keys (no stack views open, filter not focused)
 	switch key {
+	case "q":
+		return a, tea.Quit
+
 	case "esc":
-		// At tab level, esc does nothing
+		// If a filter is applied, clear it
+		if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].quickFilter.isActive() {
+			a.tabs[a.activeTab].clearFilter()
+			return a, nil
+		}
 		return a, nil
+
+	case "/":
+		// Activate filter input
+		if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].state == tabReady {
+			a.tabs[a.activeTab].quickFilter.activate()
+			return a, a.tabs[a.activeTab].quickFilter.input.Focus()
+		}
 
 	case "r":
 		// Refresh active tab
@@ -236,6 +257,10 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		idx := int(key[0]-'0') - 1
 		if idx < len(a.tabs) {
+			// Clear filter when switching tabs
+			if a.activeTab < len(a.tabs) {
+				a.tabs[a.activeTab].clearFilter()
+			}
 			a.activeTab = idx
 			return a, nil
 		}
@@ -252,10 +277,43 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// handleFilterKey routes keypresses when the filter input is focused.
+func (a App) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	tab := &a.tabs[a.activeTab]
+	key := msg.String()
+
+	switch key {
+	case "enter":
+		// Confirm filter (or clear if empty)
+		tab.quickFilter.apply(tab.issues, tab.columns)
+		tab.applyFilter()
+		return a, nil
+
+	case "esc":
+		// Cancel filter entirely
+		tab.clearFilter()
+		return a, nil
+	}
+
+	// Forward to text input
+	var cmd tea.Cmd
+	tab.quickFilter.input, cmd = tab.quickFilter.input.Update(msg)
+
+	// Live filter as user types
+	tab.quickFilter.updateQuery(tab.issues, tab.columns)
+	tab.applyFilter()
+
+	return a, cmd
+}
+
 // tableHeight returns the height available for the issue table.
 func (a App) tableHeight() int {
 	// Reserve: tab bar (1) + margin (1) + status/help line (1) + margin (1)
 	h := a.height - 4
+	// If the active tab has a filter bar visible, reserve 1 more line
+	if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].quickFilter.isActive() {
+		h--
+	}
 	if h < 3 {
 		h = 3
 	}
@@ -319,17 +377,43 @@ func (a App) renderActiveTab() string {
 	}
 	t := &a.tabs[a.activeTab]
 
+	var parts []string
+
+	// Filter bar (if active)
+	if t.quickFilter.isActive() {
+		parts = append(parts, a.renderFilterBar(t))
+	}
+
 	switch t.state {
 	case tabLoading:
-		return loadingStyle.Render("Loading issues...")
+		parts = append(parts, loadingStyle.Render("Loading issues..."))
 	case tabError:
-		return errorStyle.Render(fmt.Sprintf("Error: %s", t.errMsg))
+		parts = append(parts, errorStyle.Render(fmt.Sprintf("Error: %s", t.errMsg)))
 	case tabEmpty:
-		return emptyStyle.Render("No issues found")
+		parts = append(parts, emptyStyle.Render("No issues found"))
 	case tabReady:
-		return t.table.View()
+		parts = append(parts, t.table.View())
 	}
-	return ""
+
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// renderFilterBar draws the quick filter bar for a tab.
+func (a App) renderFilterBar(t *tab) string {
+	var bar string
+	if t.quickFilter.isFocused() {
+		bar = t.quickFilter.input.View()
+	} else {
+		// Show confirmed filter text dimmed
+		bar = filterPromptStyle.Render("/ ") + helpStyle.Render(t.quickFilter.query)
+	}
+
+	// Append match count
+	count := filterCountStyle.Render(
+		fmt.Sprintf("  %d of %d issues", t.quickFilter.matched, t.quickFilter.total),
+	)
+
+	return filterBarStyle.Render(bar + count)
 }
 
 // renderStackView draws the top view on the stack.
@@ -374,7 +458,7 @@ func (a App) renderStatusBar() string {
 	if len(a.viewStack) > 0 {
 		parts = append(parts, helpStyle.Render("esc: back  q: quit"))
 	} else {
-		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  r: refresh  1-9: tabs  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  r: refresh  1-9: tabs  q: quit"))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,

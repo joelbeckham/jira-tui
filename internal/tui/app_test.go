@@ -299,3 +299,180 @@ func TestAppTabsInitializedFromConfig(t *testing.T) {
 		t.Errorf("expected tab 0 label 'A', got '%s'", app.tabs[0].config.Label)
 	}
 }
+
+// --- Quick filter tests ---
+
+// helper: create a ready app with loaded issues on tab 0
+func testAppReady() App {
+	app := testAppWithTabs()
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	app = model.(App)
+
+	issues := []jira.Issue{
+		{Key: "PROJ-1", Fields: jira.IssueFields{Summary: "Fix login page", Status: &jira.Status{Name: "Open"}}},
+		{Key: "PROJ-2", Fields: jira.IssueFields{Summary: "Update dashboard", Status: &jira.Status{Name: "Done"}}},
+		{Key: "PROJ-3", Fields: jira.IssueFields{Summary: "Fix logout bug", Status: &jira.Status{Name: "Open"}}},
+	}
+	model, _ = app.Update(tabDataMsg{tabIndex: 0, issues: issues})
+	return model.(App)
+}
+
+func TestAppSlashActivatesFilter(t *testing.T) {
+	app := testAppReady()
+
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	updated := model.(App)
+
+	if !updated.tabs[0].quickFilter.isFocused() {
+		t.Error("expected filter to be focused after pressing /")
+	}
+}
+
+func TestAppSlashDoesNothingWhenNotReady(t *testing.T) {
+	app := testAppWithTabs()
+	app.ready = true
+
+	// Tab is still in loading state (no issues loaded)
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	updated := model.(App)
+
+	if updated.tabs[0].quickFilter.isFocused() {
+		t.Error("expected filter NOT to be focused when tab is loading")
+	}
+}
+
+func TestAppEscClearsAppliedFilter(t *testing.T) {
+	app := testAppReady()
+
+	// Activate and apply a filter
+	app.tabs[0].quickFilter.activate()
+	app.tabs[0].quickFilter.input.SetValue("login")
+	app.tabs[0].quickFilter.apply(app.tabs[0].issues, app.tabs[0].columns)
+	app.tabs[0].applyFilter()
+
+	if !app.tabs[0].quickFilter.isActive() {
+		t.Fatal("precondition: filter should be active")
+	}
+
+	// Press Esc to clear
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	updated := model.(App)
+
+	if updated.tabs[0].quickFilter.isActive() {
+		t.Error("expected filter to be cleared after Esc")
+	}
+}
+
+func TestAppEscCancelsFocusedFilter(t *testing.T) {
+	app := testAppReady()
+
+	// Activate filter (focused, typing)
+	app.tabs[0].quickFilter.activate()
+	app.tabs[0].quickFilter.input.SetValue("something")
+
+	// Press Esc to cancel
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	updated := model.(App)
+
+	if updated.tabs[0].quickFilter.isActive() {
+		t.Error("expected filter to be cleared after Esc during typing")
+	}
+}
+
+func TestAppTabSwitchClearsFilter(t *testing.T) {
+	app := testAppReady()
+
+	// Apply a filter on tab 0
+	app.tabs[0].quickFilter.activate()
+	app.tabs[0].quickFilter.input.SetValue("login")
+	app.tabs[0].quickFilter.apply(app.tabs[0].issues, app.tabs[0].columns)
+
+	// Switch to tab 2
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	updated := model.(App)
+
+	if updated.activeTab != 1 {
+		t.Errorf("expected activeTab=1, got %d", updated.activeTab)
+	}
+	// The filter on tab 0 should be cleared
+	if updated.tabs[0].quickFilter.isActive() {
+		t.Error("expected filter on tab 0 to be cleared after switching")
+	}
+}
+
+func TestAppQDoesNotQuitWhileFilterFocused(t *testing.T) {
+	app := testAppReady()
+
+	// Activate filter
+	app.tabs[0].quickFilter.activate()
+
+	// Press 'q' — should NOT quit, should route to text input
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(tea.QuitMsg); ok {
+			t.Error("expected 'q' to NOT quit while filter is focused")
+		}
+	}
+}
+
+func TestAppCtrlCQuitsEvenWhileFilterFocused(t *testing.T) {
+	app := testAppReady()
+
+	// Activate filter
+	app.tabs[0].quickFilter.activate()
+
+	// Ctrl+C should always quit
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("expected quit command from ctrl+c, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("expected QuitMsg from ctrl+c, got %T", msg)
+	}
+}
+
+func TestAppFilterEnterConfirms(t *testing.T) {
+	app := testAppReady()
+
+	// Activate filter and type
+	app.tabs[0].quickFilter.activate()
+	app.tabs[0].quickFilter.input.SetValue("login")
+	// Manually trigger updateQuery since we set the value directly
+	app.tabs[0].quickFilter.updateQuery(app.tabs[0].issues, app.tabs[0].columns)
+
+	// Press Enter to confirm
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := model.(App)
+
+	if !updated.tabs[0].quickFilter.isActive() {
+		t.Error("expected filter to still be active after Enter")
+	}
+	if updated.tabs[0].quickFilter.isFocused() {
+		t.Error("expected filter to NOT be focused after Enter (input blurred)")
+	}
+}
+
+func TestAppFilterEnterWithEmptyClears(t *testing.T) {
+	app := testAppReady()
+
+	// Activate filter but don't type anything
+	app.tabs[0].quickFilter.activate()
+
+	// Press Enter with empty input → should clear filter
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := model.(App)
+
+	if updated.tabs[0].quickFilter.isActive() {
+		t.Error("expected filter to be cleared when pressing Enter with empty input")
+	}
+}
+
+func TestAppStatusBarShowsFilterHint(t *testing.T) {
+	app := testAppReady()
+	view := app.View()
+	if !strings.Contains(view, "/: filter") {
+		t.Errorf("expected '/: filter' in status bar, got: %s", view)
+	}
+}

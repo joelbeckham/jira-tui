@@ -18,13 +18,14 @@ const (
 
 // tab holds the state for a single filter-backed tab.
 type tab struct {
-	config  config.TabConfig
-	table   table.Model
-	issues  []jira.Issue
-	state   tabState
-	errMsg  string
-	filter  *jira.Filter // the resolved filter (contains JQL)
-	columns []string     // column names from config
+	config      config.TabConfig
+	table       table.Model
+	issues      []jira.Issue
+	state       tabState
+	errMsg      string
+	jiraFilter  *jira.Filter // the resolved filter (contains JQL)
+	columns     []string     // column names from config
+	quickFilter issueFilter  // client-side quick filter
 }
 
 // newTab creates a tab from a TabConfig. The table is initialized empty;
@@ -41,10 +42,11 @@ func newTab(cfg config.TabConfig) tab {
 	t.SetStyles(s)
 
 	return tab{
-		config:  cfg,
-		table:   t,
-		state:   tabLoading,
-		columns: cfg.Columns,
+		config:      cfg,
+		table:       t,
+		state:       tabLoading,
+		columns:     cfg.Columns,
+		quickFilter: newIssueFilter(),
 	}
 }
 
@@ -64,6 +66,7 @@ func (t *tab) setSize(width, height int) {
 // setIssues populates the tab with search results.
 func (t *tab) setIssues(issues []jira.Issue) {
 	t.issues = issues
+	t.quickFilter.clear()
 	if len(issues) == 0 {
 		t.state = tabEmpty
 	} else {
@@ -86,15 +89,31 @@ func (t *tab) setLoading() {
 }
 
 // selectedIssue returns the issue at the cursor, or nil.
+// When a quick filter is active, the cursor indexes into the filtered list.
 func (t *tab) selectedIssue() *jira.Issue {
 	if t.state != tabReady || len(t.issues) == 0 {
 		return nil
 	}
+	visible := t.quickFilter.visibleIssues(t.issues)
 	idx := t.table.Cursor()
-	if idx >= 0 && idx < len(t.issues) {
-		return &t.issues[idx]
+	if idx >= 0 && idx < len(visible) {
+		return &visible[idx]
 	}
 	return nil
+}
+
+// applyFilter updates the table rows based on the current quick filter.
+func (t *tab) applyFilter() {
+	visible := t.quickFilter.visibleIssues(t.issues)
+	t.table.SetRows(issuesToRows(visible, t.columns))
+	t.table.GotoTop()
+}
+
+// clearFilter removes the quick filter and restores the full issue list.
+func (t *tab) clearFilter() {
+	t.quickFilter.clear()
+	t.table.SetRows(issuesToRows(t.issues, t.columns))
+	t.table.GotoTop()
 }
 
 // issuesToRows converts issues to table rows based on the configured columns.

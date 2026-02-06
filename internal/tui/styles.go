@@ -53,4 +53,15 @@ var (
 
 	emptyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241"))
+
+	// Filter bar styles
+	filterPromptStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("12")).
+				Bold(true)
+
+	filterBarStyle = lipgloss.NewStyle().
+				MarginBottom(0)
+
+	filterCountStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241"))
 )
