@@ -627,11 +627,10 @@ func (a App) renderStatusBar() string {
 		}
 	}
 
-	editHints := "s: status  p: priority  d: done  i: assign me  a: assignee  t: title  e: desc  del: delete"
 	if len(a.viewStack) > 0 {
-		parts = append(parts, helpStyle.Render("j/k: scroll  "+editHints+"  esc: back  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: scroll  esc: back  q: quit"))
 	} else {
-		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  "+editHints+"  /: filter  r: refresh  1-9: tabs  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  r: refresh  1-9: tabs  q: quit"))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,

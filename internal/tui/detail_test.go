@@ -313,3 +313,26 @@ func TestDetailViewImplementsViewInterface(t *testing.T) {
 		t.Error("expected view interface to work")
 	}
 }
+
+func TestDetailViewInlineHotkeys(t *testing.T) {
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
+	content := dv.renderContent()
+
+	hints := []struct {
+		text string
+		desc string
+	}{
+		{"(s)", "status hint"},
+		{"(p)", "priority hint"},
+		{"(t)", "title hint"},
+		{"(e)", "description hint"},
+		{"(a,i)", "assignee hint"},
+		{"d: mark done", "done action hint"},
+		{"del: delete", "delete action hint"},
+	}
+	for _, h := range hints {
+		if !strings.Contains(content, h.text) {
+			t.Errorf("expected inline %s '%s' in detail content", h.desc, h.text)
+		}
+	}
+}

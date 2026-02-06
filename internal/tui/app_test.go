@@ -479,19 +479,23 @@ func TestAppStatusBarShowsFilterHint(t *testing.T) {
 
 // --- Edit hotkey tests ---
 
-func TestAppStatusBarShowsEditHints(t *testing.T) {
+func TestAppStatusBarShowsGlobalHintsOnly(t *testing.T) {
 	app := testAppReady()
 	view := app.View()
 
-	editKeys := []string{"s: status", "p: priority", "d: done", "i: assign me", "t: title", "e: desc"}
-	for _, hint := range editKeys {
+	// Global hints should be present
+	for _, hint := range []string{"j/k: navigate", "enter: open", "/: filter", "r: refresh", "q: quit"} {
 		if !strings.Contains(view, hint) {
 			t.Errorf("expected '%s' in list view status bar, got: %s", hint, view)
 		}
 	}
+	// Edit hints should NOT be in the status bar
+	if strings.Contains(view, "s: status") {
+		t.Error("edit hints should not appear in status bar")
+	}
 }
 
-func TestAppStatusBarShowsEditHintsInDetailView(t *testing.T) {
+func TestAppStatusBarShowsGlobalHintsInDetailView(t *testing.T) {
 	app := testAppReady()
 
 	// Push detail view
@@ -499,11 +503,14 @@ func TestAppStatusBarShowsEditHintsInDetailView(t *testing.T) {
 	app = model.(App)
 
 	view := app.View()
-	editKeys := []string{"s: status", "p: priority", "d: done", "i: assign me", "t: title", "e: desc", "esc: back"}
-	for _, hint := range editKeys {
+	for _, hint := range []string{"j/k: scroll", "esc: back", "q: quit"} {
 		if !strings.Contains(view, hint) {
 			t.Errorf("expected '%s' in detail view status bar, got: %s", hint, view)
 		}
+	}
+	// Edit hints should NOT be in the status bar
+	if strings.Contains(view, "s: status") {
+		t.Error("edit hints should not appear in detail view status bar")
 	}
 }
 

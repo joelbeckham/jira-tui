@@ -37,6 +37,9 @@ var (
 
 	detailValueStyle = lipgloss.NewStyle()
 
+	detailHintStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
 	detailSubtaskDone = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("10")) // green ✓
 
@@ -145,16 +148,16 @@ func (v *issueDetailView) renderContent() string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Type · Status · Priority
+	// Type · Status(s) · Priority(p)
 	var meta []string
 	if fields.IssueType != nil {
 		meta = append(meta, detailTypeStyle.Render(fields.IssueType.Name))
 	}
 	if fields.Status != nil {
-		meta = append(meta, statusColor(fields.Status).Render(fields.Status.Name))
+		meta = append(meta, statusColor(fields.Status).Render(fields.Status.Name)+detailHintStyle.Render("(s)"))
 	}
 	if fields.Priority != nil {
-		meta = append(meta, priorityLabel(fields.Priority.Name))
+		meta = append(meta, priorityLabel(fields.Priority.Name)+detailHintStyle.Render("(p)"))
 	}
 	if len(meta) > 0 {
 		b.WriteString(strings.Join(meta, detailTypeStyle.Render(" · ")))
@@ -163,22 +166,27 @@ func (v *issueDetailView) renderContent() string {
 
 	b.WriteString("\n")
 
-	// Summary
+	// Summary (t)
 	b.WriteString(lipgloss.NewStyle().Bold(true).Render(fields.Summary))
+	b.WriteString("  " + detailHintStyle.Render("(t)"))
 	b.WriteString("\n\n")
 
-	// Description
+	// Description (e)
 	desc := extractADFText(fields.Description)
 	if desc != "" {
+		b.WriteString(detailSectionStyle.Render("Description") + " " + detailHintStyle.Render("(e)") + "\n")
 		b.WriteString(desc)
 		b.WriteString("\n")
+	} else {
+		b.WriteString(detailSectionStyle.Render("Description") + " " + detailHintStyle.Render("(e)") + "\n")
+		b.WriteString(detailTypeStyle.Render("No description") + "\n")
 	}
 
 	// Fields section
 	b.WriteString("\n")
 	b.WriteString(renderSection("Fields", maxWidth))
 
-	b.WriteString(renderField("Assignee", userName(fields.Assignee, "Unassigned")))
+	b.WriteString(renderFieldHint("Assignee", userName(fields.Assignee, "Unassigned"), "a,i"))
 	b.WriteString(renderField("Reporter", userName(fields.Reporter, "")))
 	b.WriteString(renderField("Project", namedValue(fields.Project)))
 	b.WriteString(renderField("Labels", labelsValue(fields.Labels)))
@@ -235,6 +243,10 @@ func (v *issueDetailView) renderContent() string {
 		}
 		b.WriteString("  " + parentLabel + "\n")
 	}
+
+	// Actions hint line
+	b.WriteString("\n")
+	b.WriteString(detailHintStyle.Render("d: mark done  del: delete") + "\n")
 
 	return b.String()
 }
@@ -295,6 +307,13 @@ func renderField(label, value string) string {
 		return ""
 	}
 	return detailLabelStyle.Render(label) + detailValueStyle.Render(value) + "\n"
+}
+
+func renderFieldHint(label, value, hint string) string {
+	if value == "" {
+		return ""
+	}
+	return detailLabelStyle.Render(label+detailHintStyle.Render("("+hint+")")) + detailValueStyle.Render(value) + "\n"
 }
 
 func userName(user *jira.User, fallback string) string {
