@@ -1,0 +1,23 @@
+# jira-tui configuration
+# Copy to config.yaml and edit values for your setup.
+
+jira:
+  base_url: https://yourcompany.atlassian.net
+
+tabs:
+  - label: "My Sprint"
+    filter_id: "10042"
+    columns: [key, summary, status, assignee, priority]
+    sort: priority
+
+  - label: "Backlog"
+    filter_id: "10043"
+    columns: [key, summary, status, priority]
+
+  - label: "Bugs"
+    filter_id: "10100"
+    columns: [key, summary, status, assignee, reporter]
+    sort: created
+
+cache:
+  ttl: 5m
