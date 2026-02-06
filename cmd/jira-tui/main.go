@@ -20,7 +20,7 @@ func main() {
 
 	client := jira.NewClient(cfg.Jira.BaseURL, cfg.Jira.Email, cfg.Jira.APIToken)
 
-	p := tea.NewProgram(tui.NewApp(client), tea.WithAltScreen())
+	p := tea.NewProgram(tui.NewApp(client, cfg.Tabs), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

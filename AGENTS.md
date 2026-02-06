@@ -45,6 +45,6 @@ tests/               # Test files
 
 ## Current Status
 
-- **Phase:** Project bootstrapping
-- **Active plans:** None yet
-- **Blockers:** Awaiting project specification
+- **Phase:** Core TUI — filter tabs + issue list implemented
+- **Active plans:** None — Spec 002 complete
+- **Next:** Issue detail view, create issue, cache layer

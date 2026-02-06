@@ -1,0 +1,221 @@
+package tui
+
+import (
+	"testing"
+
+	"github.com/jbeckham/jira-tui/internal/config"
+	"github.com/jbeckham/jira-tui/internal/jira"
+)
+
+func TestNewTab(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Sprint",
+		FilterID: "123",
+		Columns:  []string{"key", "summary", "status"},
+	}
+	tab := newTab(cfg)
+
+	if tab.config.Label != "Sprint" {
+		t.Errorf("expected label 'Sprint', got %q", tab.config.Label)
+	}
+	if tab.state != tabLoading {
+		t.Errorf("expected initial state tabLoading, got %d", tab.state)
+	}
+	if len(tab.columns) != 3 {
+		t.Errorf("expected 3 columns, got %d", len(tab.columns))
+	}
+}
+
+func TestTabSetIssues(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Test",
+		FilterID: "1",
+		Columns:  []string{"key", "summary"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(80, 20)
+
+	issues := []jira.Issue{
+		{Key: "A-1", Fields: jira.IssueFields{Summary: "First"}},
+		{Key: "A-2", Fields: jira.IssueFields{Summary: "Second"}},
+	}
+	tab.setIssues(issues)
+
+	if tab.state != tabReady {
+		t.Errorf("expected tabReady, got %d", tab.state)
+	}
+	if len(tab.issues) != 2 {
+		t.Errorf("expected 2 issues, got %d", len(tab.issues))
+	}
+}
+
+func TestTabSetIssuesEmpty(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Empty",
+		FilterID: "1",
+		Columns:  []string{"key", "summary"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(80, 20)
+	tab.setIssues(nil)
+
+	if tab.state != tabEmpty {
+		t.Errorf("expected tabEmpty, got %d", tab.state)
+	}
+}
+
+func TestTabSetError(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Err",
+		FilterID: "1",
+		Columns:  []string{"key"},
+	}
+	tab := newTab(cfg)
+	tab.setError("something broke")
+
+	if tab.state != tabError {
+		t.Errorf("expected tabError, got %d", tab.state)
+	}
+	if tab.errMsg != "something broke" {
+		t.Errorf("expected 'something broke', got %q", tab.errMsg)
+	}
+}
+
+func TestTabSetLoading(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Load",
+		FilterID: "1",
+		Columns:  []string{"key"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(80, 20)
+	tab.setIssues([]jira.Issue{{Key: "X-1"}})
+	tab.setLoading()
+
+	if tab.state != tabLoading {
+		t.Errorf("expected tabLoading, got %d", tab.state)
+	}
+}
+
+func TestTabSelectedIssue(t *testing.T) {
+	cfg := config.TabConfig{
+		Label:    "Sel",
+		FilterID: "1",
+		Columns:  []string{"key", "summary"},
+	}
+	tab := newTab(cfg)
+	tab.setSize(80, 20)
+
+	// No issues → nil
+	if got := tab.selectedIssue(); got != nil {
+		t.Error("expected nil when no issues")
+	}
+
+	issues := []jira.Issue{
+		{Key: "S-1", Fields: jira.IssueFields{Summary: "One"}},
+		{Key: "S-2", Fields: jira.IssueFields{Summary: "Two"}},
+	}
+	tab.setIssues(issues)
+	selected := tab.selectedIssue()
+	if selected == nil {
+		t.Fatal("expected selected issue, got nil")
+	}
+	if selected.Key != "S-1" {
+		t.Errorf("expected S-1 (first row), got %s", selected.Key)
+	}
+}
+
+func TestIssuesToRows(t *testing.T) {
+	cols := []string{"key", "summary", "status"}
+	issues := []jira.Issue{
+		{
+			Key: "T-1",
+			Fields: jira.IssueFields{
+				Summary: "Test summary",
+				Status:  &jira.Status{Name: "In Progress"},
+			},
+		},
+	}
+	rows := issuesToRows(issues, cols)
+
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0][0] != "T-1" {
+		t.Errorf("expected row[0][0]='T-1', got %q", rows[0][0])
+	}
+	if rows[0][1] != "Test summary" {
+		t.Errorf("expected row[0][1]='Test summary', got %q", rows[0][1])
+	}
+	if rows[0][2] != "In Progress" {
+		t.Errorf("expected row[0][2]='In Progress', got %q", rows[0][2])
+	}
+}
+
+func TestFieldValue(t *testing.T) {
+	issue := jira.Issue{
+		Key: "F-1",
+		Fields: jira.IssueFields{
+			Summary:  "My summary",
+			Status:   &jira.Status{Name: "Done"},
+			Priority: &jira.Named{Name: "High"},
+			Assignee: &jira.User{DisplayName: "Alice"},
+			Reporter: &jira.User{DisplayName: "Bob"},
+				IssueType: &jira.Named{Name: "Bug"},
+			Project:  &jira.Named{Name: "FooProj"},
+		},
+	}
+
+	tests := []struct {
+		col    string
+		expect string
+	}{
+		{"key", "F-1"},
+		{"summary", "My summary"},
+		{"status", "Done"},
+		{"priority", "High"},
+		{"assignee", "Alice"},
+		{"reporter", "Bob"},
+		{"type", "Bug"},
+		{"project", "FooProj"},
+		{"unknown", ""},
+	}
+
+	for _, tt := range tests {
+		got := fieldValue(issue, tt.col)
+		if got != tt.expect {
+			t.Errorf("fieldValue(%q) = %q, want %q", tt.col, got, tt.expect)
+		}
+	}
+}
+
+func TestFieldValueNilFields(t *testing.T) {
+	issue := jira.Issue{Key: "N-1", Fields: jira.IssueFields{}}
+
+	// Nil nested fields should return empty string, not panic
+	for _, col := range []string{"status", "priority", "assignee", "reporter", "type", "project"} {
+		got := fieldValue(issue, col)
+		if got != "" {
+			t.Errorf("fieldValue(%q) with nil field = %q, want empty", col, got)
+		}
+	}
+}
+
+func TestFormatDate(t *testing.T) {
+	tests := []struct {
+		input  string
+		expect string
+	}{
+		{"2024-01-15T10:30:00.000+0000", "2024-01-15"},
+		{"2024-12-25", "2024-12-25"},
+		{"", ""},
+		{"invalid", "invalid"},
+	}
+
+	for _, tt := range tests {
+		got := formatDate(tt.input)
+		if got != tt.expect {
+			t.Errorf("formatDate(%q) = %q, want %q", tt.input, got, tt.expect)
+		}
+	}
+}

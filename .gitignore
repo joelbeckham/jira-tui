@@ -6,6 +6,9 @@ jira-tui
 coverage.out
 coverage.html
 
+# Config files
+config.yaml
+
 # Secrets — NEVER commit credentials
 secrets.yaml
 **/secrets.yaml

@@ -71,6 +71,18 @@ tabs:
 - Cache is per-session (not persisted to disk) — keeps it simple
 - TTL default: 5 minutes (configurable in config.yaml)
 
+### 5. Issue list table (decided 2026-02-06)
+
+- **Component**: charmbracelet/bubbles `table` — provides built-in vim
+  navigation, header/row rendering, and focus management
+- **Loading strategy**: Eager parallel loading — after auth succeeds, all tabs
+  fetch their filter JQL + issues simultaneously via `tea.Batch`
+- **Column widths**: Auto-proportional — fixed-width columns (key, status, etc.)
+  get a set width, flex columns (summary) absorb remaining space. No manual
+  width config needed.
+- **Error handling**: Inline — loading, error, and empty states render directly
+  in the tab content area. No modals or overlays.
+
 ## Consequences
 
 ### Positive
