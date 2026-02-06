@@ -1,0 +1,16 @@
+# Binaries
+bin/
+
+# Test artifacts
+coverage.out
+coverage.html
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
