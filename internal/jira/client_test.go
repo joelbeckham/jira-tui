@@ -135,9 +135,7 @@ func TestGetFilterNotFound(t *testing.T) {
 
 func TestSearchIssues(t *testing.T) {
 	expected := SearchResult{
-		StartAt:    0,
-		MaxResults: 50,
-		Total:      2,
+		IsLast: true,
 		Issues: []Issue{
 			{ID: "10001", Key: "PROJ-1", Fields: IssueFields{Summary: "First issue"}},
 			{ID: "10002", Key: "PROJ-2", Fields: IssueFields{Summary: "Second issue"}},
@@ -145,7 +143,7 @@ func TestSearchIssues(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/rest/api/3/search" {
+		if r.URL.Path != "/rest/api/3/search/jql" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
@@ -171,19 +169,23 @@ func TestSearchIssues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Total != 2 {
-		t.Errorf("expected 2 total issues, got %d", result.Total)
-	}
 	if len(result.Issues) != 2 {
 		t.Errorf("expected 2 issues, got %d", len(result.Issues))
 	}
 	if result.Issues[0].Key != "PROJ-1" {
 		t.Errorf("expected PROJ-1, got %s", result.Issues[0].Key)
 	}
+	if !result.IsLast {
+		t.Error("expected IsLast=true")
+	}
 }
 
 func TestSearchIssuesDefaultMaxResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/search/jql" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body)
 		if body["maxResults"] != float64(50) {
@@ -191,7 +193,7 @@ func TestSearchIssuesDefaultMaxResults(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SearchResult{})
+		json.NewEncoder(w).Encode(SearchResult{IsLast: true})
 	}))
 	defer server.Close()
 

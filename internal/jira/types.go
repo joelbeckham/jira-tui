@@ -76,18 +76,18 @@ type Sprint struct {
 	Goal  string `json:"goal"`
 }
 
-// SearchResult represents the response from a JQL search.
+// SearchResult represents the response from a JQL search
+// (POST /rest/api/3/search/jql — enhanced search).
 type SearchResult struct {
-	StartAt    int     `json:"startAt"`
-	MaxResults int     `json:"maxResults"`
-	Total      int     `json:"total"`
-	Issues     []Issue `json:"issues"`
+	Issues        []Issue `json:"issues"`
+	NextPageToken string  `json:"nextPageToken,omitempty"`
+	IsLast        bool    `json:"isLast"`
 }
 
 // SearchOptions configures a JQL search request.
 type SearchOptions struct {
-	JQL        string
-	Fields     []string
-	StartAt    int
-	MaxResults int
+	JQL           string
+	Fields        []string
+	MaxResults    int
+	NextPageToken string
 }

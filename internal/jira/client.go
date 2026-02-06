@@ -105,7 +105,8 @@ func (c *Client) GetFilter(ctx context.Context, filterID string) (*Filter, error
 	return &filter, nil
 }
 
-// SearchIssues performs a JQL search and returns matching issues.
+// SearchIssues performs a JQL search using the enhanced search endpoint
+// (POST /rest/api/3/search/jql) and returns matching issues.
 func (c *Client) SearchIssues(ctx context.Context, opts SearchOptions) (*SearchResult, error) {
 	if opts.MaxResults == 0 {
 		opts.MaxResults = 50
@@ -113,11 +114,13 @@ func (c *Client) SearchIssues(ctx context.Context, opts SearchOptions) (*SearchR
 
 	body := map[string]interface{}{
 		"jql":        opts.JQL,
-		"startAt":    opts.StartAt,
 		"maxResults": opts.MaxResults,
 	}
 	if len(opts.Fields) > 0 {
 		body["fields"] = opts.Fields
+	}
+	if opts.NextPageToken != "" {
+		body["nextPageToken"] = opts.NextPageToken
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -125,7 +128,7 @@ func (c *Client) SearchIssues(ctx context.Context, opts SearchOptions) (*SearchR
 		return nil, fmt.Errorf("marshaling search request: %w", err)
 	}
 
-	data, err := c.do(ctx, http.MethodPost, "/rest/api/3/search", bytes.NewReader(jsonBody))
+	data, err := c.do(ctx, http.MethodPost, "/rest/api/3/search/jql", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("searching issues: %w", err)
 	}
