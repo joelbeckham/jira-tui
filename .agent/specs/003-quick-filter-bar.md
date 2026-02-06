@@ -1,6 +1,6 @@
 # Spec 003 — Quick Filter Bar
 
-> Status: approved
+> Status: implemented
 > Date: 2026-02-06
 
 ## Summary

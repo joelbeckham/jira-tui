@@ -5,10 +5,10 @@
 
 ## Tech Stack
 
-- **Language:** Go (1.21+)
-- **TUI Framework:** Bubbletea (github.com/charmbracelet/bubbletea)
-- **Styling:** Lipgloss (github.com/charmbracelet/lipgloss)
-- **Components:** Bubbles (github.com/charmbracelet/bubbles)
+- **Language:** Go 1.24+
+- **TUI Framework:** Bubbletea v1.3 (github.com/charmbracelet/bubbletea)
+- **Styling:** Lipgloss v1.1 (github.com/charmbracelet/lipgloss)
+- **Components:** Bubbles v0.21 (github.com/charmbracelet/bubbles) — table, textinput
 - **Config:** YAML via gopkg.in/yaml.v3
 - **Build tool:** `go build` / Makefile
 - **Test framework:** Go built-in (`go test`)
@@ -28,13 +28,17 @@
 ```
 cmd/jira-tui/          # Entry point (main.go)
 internal/
-  tui/                 # Bubbletea models, views, components
-    views/             # Full-screen views (board, issues, detail, search)
-    components/        # Reusable UI widgets
-  jira/                # Jira REST API client
-  config/              # Configuration loading
-docs/                  # Human-facing documentation
-.agent/                # Agent workspace (specs, plans, checklists)
+  tui/                 # Bubbletea models, views, key handling, styles
+    app.go             # Root model (App), Update, View, key routing
+    tab.go             # Tab model, issue-to-row rendering, fieldValue
+    filter.go          # Client-side quick filter (issueFilter)
+    priority.go        # Priority icon/label mappings
+    columns.go         # Auto-proportional column width builder
+    styles.go          # All lipgloss styles
+    keymap.go          # (placeholder for future keymap extraction)
+  jira/                # Jira REST API client (Cloud v3, Basic Auth)
+  config/              # Config + secrets loading (YAML)
+.agent/                # Agent workspace (specs, context, decisions)
 ```
 
 ## Naming Conventions
@@ -75,7 +79,7 @@ docs/                  # Human-facing documentation
 ## Agent-Specific Rules
 
 - Always read this file before starting work
-- Check `.agent/plans/` for active plans before making changes
+- Consult specs in `.agent/specs/` for feature requirements
 - Don't modify specs — those are human-authored; ask for clarification instead
-- Update checklists as you complete steps
-- When uncertain, document the assumption in the plan/checklist notes
+- Record significant architectural choices in `.agent/decisions/`
+- When uncertain, document the assumption and proceed with the safer choice

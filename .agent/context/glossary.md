@@ -9,5 +9,9 @@
 | Issue         | A Jira work item (bug, story, task, epic, etc.)     |
 | Sprint        | A time-boxed iteration in agile development         |
 | Board         | A Jira view showing issues organized by status      |
-
-<!-- Add more terms as the project evolves -->
+| Filter Tab    | A TUI tab backed by a Jira saved filter, displaying matching issues |
+| Quick Filter  | Client-side text filter that narrows the visible issue list without API calls |
+| View Stack    | Push/pop navigation layered on top of the tab bar (e.g., issue detail) |
+| Saved Filter  | A Jira server-side filter defined by JQL, referenced by filter ID |
+| JQL           | Jira Query Language — the query syntax for searching issues |
+| ADF           | Atlassian Document Format — rich text format used in Jira issue descriptions |

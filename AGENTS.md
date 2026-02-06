@@ -5,37 +5,35 @@
 
 ## Project Overview
 
-**jira-tui** — (description TBD, to be filled in once project specifics are defined)
+**jira-tui** — A fast, minimalist, keyboard-driven Jira TUI built with Go and
+Bubbletea. Connects to Jira Cloud (REST API v3) and displays issues in
+configurable filter tabs with vim-style navigation.
 
 ## Directory Map
 
 ```
-.agent/              # Agent workspace — specs, plans, checklists, context
+.agent/              # Agent workspace
   specs/             # Feature and system specifications (agent reads these)
-  plans/             # Implementation plans (agent generates and follows these)
-  checklists/        # Task checklists for tracking progress
   context/           # Background context, constraints, conventions
   decisions/         # Architecture Decision Records (ADRs)
 
-docs/                # Human-readable documentation
-src/                 # Application source code
-tests/               # Test files
+cmd/jira-tui/        # Application entry point
+internal/
+  tui/               # Bubbletea models, views, styles
+  jira/              # Jira REST API client
+  config/            # Configuration loading
 ```
 
 ## Workflow for Agents
 
 1. **Read context first** — check `.agent/context/conventions.md` for coding style,
    tech stack, and project constraints before writing any code.
-2. **Check for existing plans** — look in `.agent/plans/` for active implementation
-   plans before starting new work.
-3. **Consult specs** — feature specs in `.agent/specs/` are the source of truth for
+2. **Consult specs** — feature specs in `.agent/specs/` are the source of truth for
    what should be built.
-4. **Generate a plan** — for non-trivial work, create a plan in `.agent/plans/`
-   before implementing. Include clear steps and acceptance criteria.
-5. **Track with checklists** — use `.agent/checklists/` to track multi-step work.
-   Update checklist items as you go.
-6. **Record decisions** — when making significant architectural choices, write an
+3. **Record decisions** — when making significant architectural choices, write an
    ADR in `.agent/decisions/`.
+4. **Write tests alongside implementation** — use table-driven tests, mock the
+   Jira API with `httptest`, test TUI models by calling `Update()` directly.
 
 ## Conventions
 
@@ -45,6 +43,7 @@ tests/               # Test files
 
 ## Current Status
 
-- **Phase:** Core TUI — filter tabs + issue list implemented
-- **Active plans:** None — Spec 002 complete
-- **Next:** Issue detail view, create issue, cache layer
+- **Phase:** Core TUI — filter tabs, issue list, quick filter implemented
+- **Completed specs:** 001 (foundation), 002 (filter tabs + issue list), 003 (quick filter bar)
+- **Also done:** Priority icons in list/detail views, search API migration
+- **Next:** Issue detail view (full), create issue, cache layer
