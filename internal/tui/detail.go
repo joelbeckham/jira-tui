@@ -404,6 +404,22 @@ func formatDetailDate(s string) string {
 	return s
 }
 
+// Relation tag styles for the related-issues picker.
+var (
+	relParentStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("12")). // blue
+			Bold(true)
+	relSubtaskStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("10")) // green
+	relLinkStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("11")) // yellow
+)
+
+// relationTag renders a colored bracketed label.
+func relationTag(label string, style lipgloss.Style) string {
+	return style.Render("[" + label + "]")
+}
+
 // relatedIssues returns selection items for all drillable issues (parent,
 // subtasks, linked issues) in a consistent order.
 func (v *issueDetailView) relatedIssues() []selectionItem {
@@ -417,18 +433,22 @@ func (v *issueDetailView) relatedIssues() []selectionItem {
 			summary = fields.Parent.Fields.Summary
 		}
 		items = append(items, selectionItem{
-			ID:    fields.Parent.Key,
-			Label: fields.Parent.Key + "  " + summary,
-			Desc:  "Parent",
+			ID:      fields.Parent.Key,
+			Label:   fields.Parent.Key + " " + summary + " Parent",
+			Icon:    relParentStyle.Render("▲"),
+			Display: relationTag("Parent", relParentStyle) + "  " + detailKeyStyle.Render(fields.Parent.Key) + "  " + summary,
+			Desc:    "Parent",
 		})
 	}
 
 	// 2. Subtasks
 	for _, sub := range fields.Subtasks {
 		items = append(items, selectionItem{
-			ID:    sub.Key,
-			Label: sub.Key + "  " + sub.Fields.Summary,
-			Desc:  "Subtask",
+			ID:      sub.Key,
+			Label:   sub.Key + " " + sub.Fields.Summary + " Subtask",
+			Icon:    relSubtaskStyle.Render("▼"),
+			Display: relationTag("Subtask", relSubtaskStyle) + "  " + detailKeyStyle.Render(sub.Key) + "  " + sub.Fields.Summary,
+			Desc:    "Subtask",
 		})
 	}
 
@@ -436,16 +456,20 @@ func (v *issueDetailView) relatedIssues() []selectionItem {
 	for _, link := range fields.IssueLinks {
 		if link.OutwardIssue != nil {
 			items = append(items, selectionItem{
-				ID:    link.OutwardIssue.Key,
-				Label: link.OutwardIssue.Key + "  " + link.OutwardIssue.Fields.Summary,
-				Desc:  link.Type.Outward,
+				ID:      link.OutwardIssue.Key,
+				Label:   link.OutwardIssue.Key + " " + link.OutwardIssue.Fields.Summary + " " + link.Type.Outward,
+				Icon:    relLinkStyle.Render("↔"),
+				Display: relationTag(link.Type.Outward, relLinkStyle) + "  " + detailKeyStyle.Render(link.OutwardIssue.Key) + "  " + link.OutwardIssue.Fields.Summary,
+				Desc:    link.Type.Outward,
 			})
 		}
 		if link.InwardIssue != nil {
 			items = append(items, selectionItem{
-				ID:    link.InwardIssue.Key,
-				Label: link.InwardIssue.Key + "  " + link.InwardIssue.Fields.Summary,
-				Desc:  link.Type.Inward,
+				ID:      link.InwardIssue.Key,
+				Label:   link.InwardIssue.Key + " " + link.InwardIssue.Fields.Summary + " " + link.Type.Inward,
+				Icon:    relLinkStyle.Render("↔"),
+				Display: relationTag(link.Type.Inward, relLinkStyle) + "  " + detailKeyStyle.Render(link.InwardIssue.Key) + "  " + link.InwardIssue.Fields.Summary,
+				Desc:    link.Type.Inward,
 			})
 		}
 	}

@@ -51,9 +51,11 @@ var (
 
 // selectionItem is a single option in the selection list.
 type selectionItem struct {
-	ID    string
-	Label string
-	Desc  string // optional secondary text
+	ID      string
+	Label   string
+	Desc    string // optional secondary text (used for filtering)
+	Display string // optional pre-rendered label (overrides Label+Desc for display)
+	Icon    string // optional pre-rendered icon (rendered outside of highlight)
 }
 
 // selectionOverlay is a filterable selection list.
@@ -155,14 +157,27 @@ func (s *selectionOverlay) View(width, height int) string {
 	for i := start; i < len(s.filtered) && i < start+maxVisible; i++ {
 		idx := s.filtered[i]
 		item := s.items[idx]
-		line := item.Label
-		if item.Desc != "" {
-			line += overlayFilterStyle.Render("  " + item.Desc)
+		var line string
+		if item.Display != "" {
+			line = item.Display
+		} else {
+			line = item.Label
+			if item.Desc != "" {
+				line += overlayFilterStyle.Render("  " + item.Desc)
+			}
 		}
 		if i == s.cursor {
-			b.WriteString(overlaySelectedStyle.Render("> " + line))
+			if item.Icon != "" {
+				b.WriteString(item.Icon + " " + overlaySelectedStyle.Render(line))
+			} else {
+				b.WriteString(overlaySelectedStyle.Render("> " + line))
+			}
 		} else {
-			b.WriteString(overlayItemStyle.Render("  " + line))
+			if item.Icon != "" {
+				b.WriteString(item.Icon + " " + line)
+			} else {
+				b.WriteString("  " + line)
+			}
 		}
 		b.WriteString("\n")
 	}
