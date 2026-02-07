@@ -74,21 +74,24 @@ func statusColor(status *jira.Status) lipgloss.Style {
 
 // issueDetailView is the full detail view for a single issue.
 type issueDetailView struct {
-	issue    jira.Issue
-	viewport viewport.Model
-	ready    bool
-	loading  bool  // true while the full issue fetch is in-flight
-	dirty    bool  // true if the issue was edited while this view was open
-	width    int
-	height   int
+	issue           jira.Issue
+	viewport        viewport.Model
+	ready           bool
+	loading         bool // true while the full issue fetch is in-flight
+	dirty           bool // true if the issue was edited while this view was open
+	comments        []jira.Comment
+	commentsLoading bool
+	width           int
+	height          int
 }
 
 func newIssueDetailView(issue jira.Issue, width, height int) issueDetailView {
 	v := issueDetailView{
-		issue:   issue,
-		width:   width,
-		height:  height,
-		loading: true,
+		issue:           issue,
+		width:           width,
+		height:          height,
+		loading:         true,
+		commentsLoading: true,
 	}
 	v.buildViewport()
 	return v
@@ -257,6 +260,37 @@ func (v *issueDetailView) renderContent() string {
 			parentLabel += "  " + fields.Parent.Fields.Summary
 		}
 		b.WriteString("  " + parentLabel + "\n")
+	}
+
+	// Comments
+	if v.commentsLoading {
+		b.WriteString("\n")
+		b.WriteString(renderSection("Comments", maxWidth))
+		b.WriteString(detailTypeStyle.Render("  Loading…") + "\n")
+	} else if len(v.comments) > 0 {
+		b.WriteString("\n")
+		b.WriteString(renderSection(fmt.Sprintf("Comments (%d)", len(v.comments)), maxWidth))
+		for i, c := range v.comments {
+			author := "Unknown"
+			if c.Author != nil {
+				author = c.Author.DisplayName
+			}
+			date := formatDetailDate(c.Created)
+			b.WriteString(fmt.Sprintf("  %s  %s\n",
+				lipgloss.NewStyle().Bold(true).Render(author),
+				detailTypeStyle.Render(date),
+			))
+			body := extractADFText(c.Body)
+			if body != "" {
+				// Indent comment body
+				for _, line := range strings.Split(body, "\n") {
+					b.WriteString("  " + line + "\n")
+				}
+			}
+			if i < len(v.comments)-1 {
+				b.WriteString("\n")
+			}
+		}
 	}
 
 	// Actions hint line

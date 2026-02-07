@@ -159,6 +159,20 @@ func (c *Client) GetIssue(ctx context.Context, issueKeyOrID string) (*Issue, err
 	return &issue, nil
 }
 
+// GetComments returns the comments for a Jira issue, newest first.
+func (c *Client) GetComments(ctx context.Context, issueKeyOrID string) ([]Comment, error) {
+	path := fmt.Sprintf("/rest/api/3/issue/%s/comment?orderBy=-created&maxResults=50", issueKeyOrID)
+	data, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting comments for %s: %w", issueKeyOrID, err)
+	}
+	var resp CommentsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("parsing comments: %w", err)
+	}
+	return resp.Comments, nil
+}
+
 // UpdateIssue updates an issue's fields (summary, description, priority, etc.).
 func (c *Client) UpdateIssue(ctx context.Context, issueKeyOrID string, fields map[string]interface{}) error {
 	body := map[string]interface{}{

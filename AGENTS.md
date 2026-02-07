@@ -44,11 +44,11 @@ internal/
 ## Current Status
 
 - **Phase:** Optimistic UI, performance
-- **Completed specs:** 001 (foundation), 002 (filter tabs + issue list), 003 (quick filter bar), 005 (quick-create issue), 006 (optimistic UI)
+- **Completed specs:** 001 (foundation), 002 (filter tabs + issue list), 003 (quick filter bar), 005 (quick-create issue), 006 (optimistic UI), 008 (detail view comments)
 - **Also done:** Priority icons, search API migration, detail view, ADF extraction,
   overlay system (selection/textinput/textarea/confirm), all hotkey editing
   (s/p/d/i/a/t/e/del), user cache, async transition + user + priority fetching,
   clipboard copy (y/u), quick-create issue (c), cursor preservation on update,
   optimistic detail view (instant open with partial data), background refresh on
-  esc-back, optimistic delete
+  esc-back, optimistic delete, detail view comments (optimistic loading)
 - **Next:** Cache layer, column sorting

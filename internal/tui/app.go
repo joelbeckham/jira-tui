@@ -89,6 +89,13 @@ type issueCreatedMsg struct {
 	err      error
 }
 
+// commentsLoadedMsg delivers comments for the detail view.
+type commentsLoadedMsg struct {
+	issueKey string
+	comments []jira.Comment
+	err      error
+}
+
 // --- View stack ---
 
 // view is a stacked view that renders on top of the tab bar.
@@ -339,6 +346,28 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case commentsLoadedMsg:
+		a.inflight--
+		if msg.err != nil {
+			// Silently fail — comments are supplementary
+			if len(a.viewStack) > 0 {
+				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+					if dv.issue.Key == msg.issueKey {
+						dv.commentsLoading = false
+						dv.buildViewport()
+					}
+				}
+			}
+		} else if len(a.viewStack) > 0 {
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				if dv.issue.Key == msg.issueKey {
+					dv.comments = msg.comments
+					dv.commentsLoading = false
+					dv.buildViewport()
+				}
+			}
+		}
+
 	case transitionsLoadedMsg:
 		a.inflight--
 		if msg.err != nil {
@@ -424,6 +453,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.viewStack = append(a.viewStack, &dv)
 			var cmds []tea.Cmd
 			cmds = append(cmds, a.cmdFetchIssue(msg.issueKey))
+			cmds = append(cmds, a.cmdFetchComments(msg.issueKey))
+			a.inflight++ // extra inflight for comments
 			// Refresh the active tab in the background to pick up the new issue.
 			// Don't call setLoading() — keep the current list visible so esc-back is instant.
 			if a.connected && a.activeTab < len(a.tabs) {
@@ -547,12 +578,16 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case "enter":
-		// Push issue detail onto stack and fetch full issue
+		// Push issue detail onto stack and fetch full issue + comments
 		if a.activeTab < len(a.tabs) {
 			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
 				dv := newIssueDetailView(*issue, a.width, a.height)
 				a.viewStack = append(a.viewStack, &dv)
-				return a, a.startNetwork(a.cmdFetchIssue(issue.Key))
+				a.inflight++ // extra inflight for comments
+				return a, tea.Batch(
+					a.startNetwork(a.cmdFetchIssue(issue.Key)),
+					a.cmdFetchComments(issue.Key),
+				)
 			}
 		}
 
@@ -1046,6 +1081,21 @@ func (a App) cmdFetchIssue(issueKey string) tea.Cmd {
 			return issueDetailMsg{issueKey: issueKey, err: err}
 		}
 		return issueDetailMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// cmdFetchComments fetches comments for the detail view.
+func (a App) cmdFetchComments(issueKey string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	return func() tea.Msg {
+		comments, err := client.GetComments(context.Background(), issueKey)
+		if err != nil {
+			return commentsLoadedMsg{issueKey: issueKey, err: err}
+		}
+		return commentsLoadedMsg{issueKey: issueKey, comments: comments}
 	}
 }
 

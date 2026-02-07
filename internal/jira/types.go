@@ -142,3 +142,20 @@ type CreateIssueResponse struct {
 	Key  string `json:"key"`
 	Self string `json:"self"`
 }
+
+// Comment represents a single Jira issue comment.
+type Comment struct {
+	ID      string      `json:"id"`
+	Author  *User       `json:"author"`
+	Body    interface{} `json:"body"` // ADF document (same format as issue description)
+	Created string      `json:"created"`
+	Updated string      `json:"updated"`
+}
+
+// CommentsResponse is the paginated response from GET issue comments.
+type CommentsResponse struct {
+	Comments   []Comment `json:"comments"`
+	StartAt    int       `json:"startAt"`
+	MaxResults int       `json:"maxResults"`
+	Total      int       `json:"total"`
+}
