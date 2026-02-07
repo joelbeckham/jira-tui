@@ -10,6 +10,7 @@
 - **Inline editing** — change status (`s`), priority (`p`), assignee (`a`), title (`t`), description (`e`) via overlays
 - **Quick actions** — assign to me (`i`), mark done (`d`), delete (`del`)
 - **Quick create** — press `c` to create a new issue (summary → type → submit)
+- **Add comment** — press `c` on the detail view to add a comment
 - **Clipboard** — yank issue key (`y`) or copy URL (`u`)
 - **Detail view** — full scrollable issue detail with fields, subtasks, linked issues
 - **Priority icons** — colored Unicode icons in the issue list
@@ -93,7 +94,7 @@ make run
 ### Other
 | Key | Action |
 |-----|--------|
-| `c` | Create new issue |
+| `c` | Create new issue (list) / Add comment (detail) |
 | `y` | Copy issue key |
 | `u` | Copy issue URL |
 
@@ -103,22 +104,9 @@ make run
 AGENTS.md              # Entry point for AI agents — read this first
 .agent/                # Agent workspace
   specs/               # What to build (human-authored)
-  plans/               # How to build it (agent-generated)
-  checklists/          # Progress tracking
   context/             # Conventions, glossary, constraints
   decisions/           # Architecture Decision Records
-docs/                  # Human documentation
 src/                   # Source code
 tests/                 # Tests
 ```
 
-## Contributing
-
-This project uses an **agent-first workflow**:
-
-1. Write a spec in `.agent/specs/` describing the feature or change.
-2. Have the agent generate a plan in `.agent/plans/`.
-3. Review and approve the plan.
-4. Let the agent implement, tracking progress in `.agent/checklists/`.
-
-See [AGENTS.md](AGENTS.md) for full details.

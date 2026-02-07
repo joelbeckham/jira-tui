@@ -295,7 +295,7 @@ func (v *issueDetailView) renderContent() string {
 
 	// Actions hint line
 	b.WriteString("\n")
-	b.WriteString(detailHintStyle.Render("d: mark done  u: copy url  del: delete") + "\n")
+	b.WriteString(detailHintStyle.Render("c: comment  d: mark done  u: copy url  del: delete") + "\n")
 
 	return b.String()
 }

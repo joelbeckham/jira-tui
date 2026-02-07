@@ -96,6 +96,13 @@ type commentsLoadedMsg struct {
 	err      error
 }
 
+// commentAddedMsg is sent after a comment is posted to the API.
+type commentAddedMsg struct {
+	issueKey string
+	comment  *jira.Comment
+	err      error
+}
+
 // --- View stack ---
 
 // view is a stacked view that renders on top of the tab bar.
@@ -368,6 +375,34 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case commentAddedMsg:
+		a.inflight--
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+			// Remove the optimistic placeholder (first comment) on failure
+			if len(a.viewStack) > 0 {
+				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+					if dv.issue.Key == msg.issueKey && len(dv.comments) > 0 {
+						dv.comments = dv.comments[1:]
+						dv.buildViewport()
+					}
+				}
+			}
+		} else {
+			a.flash = "Comment added"
+			a.flashIsErr = false
+			// Replace the optimistic placeholder with the real comment
+			if len(a.viewStack) > 0 {
+				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+					if dv.issue.Key == msg.issueKey && msg.comment != nil && len(dv.comments) > 0 {
+						dv.comments[0] = *msg.comment
+						dv.buildViewport()
+					}
+				}
+			}
+		}
+
 	case transitionsLoadedMsg:
 		a.inflight--
 		if msg.err != nil {
@@ -517,8 +552,20 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		}
-		// Edit hotkeys on the detail view's issue
+		// Detail-view-specific hotkeys
 		if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+			if key == "c" {
+				// Add comment
+				if a.client == nil {
+					a.flash = "Not connected to Jira"
+					a.flashIsErr = true
+					return a, nil
+				}
+				a.overlay = newTextEditorOverlay("Add Comment", "", a.width, a.height)
+				a.overlayIssue = dv.issue.Key
+				a.overlayAction = overlayActionAddComment
+				return a, nil
+			}
 			if model, cmd, handled := a.handleEditHotkey(msg, &dv.issue); handled {
 				return model, cmd
 			}
@@ -800,7 +847,7 @@ func (a App) renderStatusBar() string {
 	}
 
 	if len(a.viewStack) > 0 {
-		parts = append(parts, helpStyle.Render("j/k: scroll  esc: back  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: scroll  c: comment  esc: back  q: quit"))
 	} else {
 		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  c: create  r: refresh  1-9: tabs  q: quit"))
 	}
@@ -964,6 +1011,7 @@ const (
 	overlayActionDelete
 	overlayActionCreateSummary // step 1: enter summary
 	overlayActionCreateType    // step 2: pick issue type
+	overlayActionAddComment    // add comment from detail view
 )
 
 // handleOverlayResult processes the result of a completed overlay and dispatches
@@ -1064,6 +1112,28 @@ func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
 		a.flash = "Creating issue..."
 		a.flashIsErr = false
 		return a, a.cmdCreateIssue(summary, item.Label)
+
+	case overlayActionAddComment:
+		text := result.(string)
+		if strings.TrimSpace(text) == "" {
+			a.flash = "Comment cannot be empty"
+			a.flashIsErr = true
+			return a, nil
+		}
+		// Optimistic: prepend a placeholder comment to the detail view
+		if len(a.viewStack) > 0 {
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				placeholder := jira.Comment{
+					Body:    makeADFDocument(text),
+					Created: "just now",
+				}
+				dv.comments = append([]jira.Comment{placeholder}, dv.comments...)
+				dv.buildViewport()
+			}
+		}
+		a.flash = "Adding comment..."
+		a.flashIsErr = false
+		return a, a.startNetwork(a.cmdAddComment(issueKey, text))
 	}
 
 	return a, nil
@@ -1096,6 +1166,22 @@ func (a App) cmdFetchComments(issueKey string) tea.Cmd {
 			return commentsLoadedMsg{issueKey: issueKey, err: err}
 		}
 		return commentsLoadedMsg{issueKey: issueKey, comments: comments}
+	}
+}
+
+// cmdAddComment posts a comment to a Jira issue.
+func (a App) cmdAddComment(issueKey, text string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	body := makeADFDocument(text)
+	return func() tea.Msg {
+		comment, err := client.AddComment(context.Background(), issueKey, body)
+		if err != nil {
+			return commentAddedMsg{issueKey: issueKey, err: err}
+		}
+		return commentAddedMsg{issueKey: issueKey, comment: comment}
 	}
 }
 

@@ -51,5 +51,5 @@ internal/
   clipboard copy (y/u), quick-create issue (c), cursor preservation on update,
   optimistic detail view (instant open with partial data), background refresh on
   esc-back, optimistic delete, detail view comments (optimistic loading),
-  init command (.jira-tui directory auto-setup)
+  init command (.jira-tui directory auto-setup), add comment from detail view (c)
 - **Next:** Cache layer, column sorting

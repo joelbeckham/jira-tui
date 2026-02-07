@@ -173,6 +173,24 @@ func (c *Client) GetComments(ctx context.Context, issueKeyOrID string) ([]Commen
 	return resp.Comments, nil
 }
 
+// AddComment adds a comment to a Jira issue. The body is an ADF document.
+func (c *Client) AddComment(ctx context.Context, issueKeyOrID string, body map[string]interface{}) (*Comment, error) {
+	jsonBody, err := json.Marshal(map[string]interface{}{"body": body})
+	if err != nil {
+		return nil, fmt.Errorf("marshaling comment: %w", err)
+	}
+	path := fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKeyOrID)
+	data, err := c.do(ctx, http.MethodPost, path, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("adding comment to %s: %w", issueKeyOrID, err)
+	}
+	var comment Comment
+	if err := json.Unmarshal(data, &comment); err != nil {
+		return nil, fmt.Errorf("parsing comment response: %w", err)
+	}
+	return &comment, nil
+}
+
 // UpdateIssue updates an issue's fields (summary, description, priority, etc.).
 func (c *Client) UpdateIssue(ctx context.Context, issueKeyOrID string, fields map[string]interface{}) error {
 	body := map[string]interface{}{

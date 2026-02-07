@@ -60,6 +60,16 @@ from Jira's ADF format.
 4. On `issueCreatedMsg`, also dispatch `cmdFetchComments` alongside
    `cmdFetchIssue`.
 
+#### 3b. Add comment flow
+
+1. `c` key on detail view opens a textarea overlay (`overlayActionAddComment`).
+2. On submit, optimistically prepend a placeholder comment (with `"just now"`
+   timestamp) to the detail view and rebuild the viewport.
+3. `cmdAddComment(issueKey, text)` calls `AddComment` API method.
+4. `commentAddedMsg{issueKey, comment, err}` carries the result.
+5. On success, replace the placeholder with the real comment from the API.
+6. On failure, remove the placeholder and show an error flash.
+
 #### 4. Detail view updates
 
 1. `issueDetailView` gains `comments []jira.Comment` and
@@ -98,11 +108,15 @@ from Jira's ADF format.
 ## Files Changed
 
 - `internal/jira/types.go` — `Comment`, `CommentsResponse` structs
-- `internal/jira/client.go` — `GetComments()` method
-- `internal/tui/app.go` — `commentsLoadedMsg`, handler, `cmdFetchComments`,
+- `internal/jira/client.go` — `GetComments()`, `AddComment()` methods
+- `internal/tui/app.go` — `commentsLoadedMsg`, `commentAddedMsg`, handlers,
+  `cmdFetchComments`, `cmdAddComment`, `overlayActionAddComment`,
   dispatch from `enter` and `issueCreatedMsg`
-- `internal/tui/detail.go` — `comments`/`commentsLoading` fields, rendering
+- `internal/tui/detail.go` — `comments`/`commentsLoading` fields, rendering,
+  updated hint line
 
 ## References
 
 - [Jira REST API — Get comments](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-get)
+- [Jira REST API — Add comment](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-post)
+- [Jira REST API — Add comment](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-post)
