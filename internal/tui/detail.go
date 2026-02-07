@@ -72,6 +72,21 @@ func statusColor(status *jira.Status) lipgloss.Style {
 	}
 }
 
+// issueTypeColor returns a lipgloss style colored by issue type name.
+func issueTypeColor(name string) lipgloss.Style {
+	s := lipgloss.NewStyle().Bold(true)
+	switch strings.ToLower(name) {
+	case "epic":
+		return s.Foreground(lipgloss.Color("135")) // purple
+	case "bug":
+		return s.Foreground(lipgloss.Color("9")) // red
+	case "compliance":
+		return s.Foreground(lipgloss.Color("208")) // orange
+	default:
+		return s.Foreground(lipgloss.Color("241")) // gray
+	}
+}
+
 // issueDetailView is the full detail view for a single issue.
 type issueDetailView struct {
 	issue           jira.Issue
@@ -163,7 +178,7 @@ func (v *issueDetailView) renderContent() string {
 	// Type · Status(s) · Priority(p)
 	var meta []string
 	if fields.IssueType != nil {
-		meta = append(meta, detailTypeStyle.Render(fields.IssueType.Name))
+		meta = append(meta, issueTypeColor(fields.IssueType.Name).Render(fields.IssueType.Name))
 	}
 	if fields.Status != nil {
 		meta = append(meta, statusColor(fields.Status).Render(fields.Status.Name)+detailHintStyle.Render("(s)"))
