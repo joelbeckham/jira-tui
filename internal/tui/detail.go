@@ -75,6 +75,7 @@ func statusColor(status *jira.Status) lipgloss.Style {
 // issueDetailView is the full detail view for a single issue.
 type issueDetailView struct {
 	issue           jira.Issue
+	baseURL         string // Jira base URL for constructing browse links
 	viewport        viewport.Model
 	ready           bool
 	loading         bool // true while the full issue fetch is in-flight
@@ -85,9 +86,10 @@ type issueDetailView struct {
 	height          int
 }
 
-func newIssueDetailView(issue jira.Issue, width, height int) issueDetailView {
+func newIssueDetailView(issue jira.Issue, baseURL string, width, height int) issueDetailView {
 	v := issueDetailView{
 		issue:           issue,
+		baseURL:         baseURL,
 		width:           width,
 		height:          height,
 		loading:         true,
@@ -141,7 +143,7 @@ func (v *issueDetailView) renderContent() string {
 
 	var b strings.Builder
 
-	// Header: KEY(k) ▸ Parent (if any)
+	// Header: KEY ▸ Parent (if any)
 	header := detailKeyStyle.Render(issue.Key) + detailHintStyle.Render("(y)")
 	if fields.Parent != nil {
 		parentLabel := fields.Parent.Key
@@ -166,6 +168,14 @@ func (v *issueDetailView) renderContent() string {
 	}
 	if len(meta) > 0 {
 		b.WriteString(strings.Join(meta, detailTypeStyle.Render(" · ")))
+		b.WriteString("\n")
+	}
+
+	// URL line
+	if v.baseURL != "" {
+		url := v.baseURL + "/browse/" + issue.Key
+		b.WriteString(detailTypeStyle.Render(url))
+		b.WriteString("  " + detailHintStyle.Render("(u,o)"))
 		b.WriteString("\n")
 	}
 
@@ -292,10 +302,6 @@ func (v *issueDetailView) renderContent() string {
 			}
 		}
 	}
-
-	// Actions hint line
-	b.WriteString("\n")
-	b.WriteString(detailHintStyle.Render("c: comment  d: mark done  u: copy url  del: delete") + "\n")
 
 	return b.String()
 }

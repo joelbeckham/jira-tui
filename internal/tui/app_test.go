@@ -273,8 +273,8 @@ func TestAppIssueDetailPushPop(t *testing.T) {
 	if !strings.Contains(view, "PROJ-1") {
 		t.Errorf("expected PROJ-1 in detail view, got: %s", view)
 	}
-	if !strings.Contains(view, "esc: back") {
-		t.Errorf("expected 'esc: back' in detail view, got: %s", view)
+	if !strings.Contains(view, "q: quit") {
+		t.Errorf("expected 'q: quit' in detail view status bar, got: %s", view)
 	}
 
 	// Press Esc to pop
@@ -484,7 +484,7 @@ func TestAppStatusBarShowsGlobalHintsOnly(t *testing.T) {
 	view := app.View()
 
 	// Global hints should be present
-	for _, hint := range []string{"j/k: navigate", "enter: open", "/: filter", "r: refresh", "q: quit"} {
+	for _, hint := range []string{"/: filter", "c: create", "o: open", "q: quit"} {
 		if !strings.Contains(view, hint) {
 			t.Errorf("expected '%s' in list view status bar, got: %s", hint, view)
 		}
@@ -503,7 +503,7 @@ func TestAppStatusBarShowsGlobalHintsInDetailView(t *testing.T) {
 	app = model.(App)
 
 	view := app.View()
-	for _, hint := range []string{"j/k: scroll", "esc: back", "q: quit"} {
+	for _, hint := range []string{"q: quit"} {
 		if !strings.Contains(view, hint) {
 			t.Errorf("expected '%s' in detail view status bar, got: %s", hint, view)
 		}

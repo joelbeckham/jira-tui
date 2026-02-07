@@ -45,6 +45,11 @@ func NewClient(baseURL, email, apiToken string, opts ...ClientOption) *Client {
 	return c
 }
 
+// BaseURL returns the Jira instance base URL.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 // BrowseURL returns the Jira web URL for the given issue key.
 func (c *Client) BrowseURL(issueKey string) string {
 	return c.baseURL + "/browse/" + issueKey

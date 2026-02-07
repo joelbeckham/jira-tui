@@ -136,6 +136,14 @@ func (a *App) startNetwork(cmd tea.Cmd) tea.Cmd {
 	return cmd
 }
 
+// clientBaseURL returns the Jira base URL from the client, or empty string.
+func (a App) clientBaseURL() string {
+	if a.client == nil {
+		return ""
+	}
+	return a.client.BaseURL()
+}
+
 
 
 // --- App model ---
@@ -487,7 +495,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.flashIsErr = false
 			// Push detail view for the new issue and fetch its data
 			stub := jira.Issue{Key: msg.issueKey}
-			dv := newIssueDetailView(stub, a.width, a.height)
+			dv := newIssueDetailView(stub, a.clientBaseURL(), a.width, a.height)
 			a.viewStack = append(a.viewStack, &dv)
 			var cmds []tea.Cmd
 			cmds = append(cmds, a.cmdFetchIssue(msg.issueKey))
@@ -631,7 +639,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Push issue detail onto stack and fetch full issue + comments
 		if a.activeTab < len(a.tabs) {
 			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
-				dv := newIssueDetailView(*issue, a.width, a.height)
+				dv := newIssueDetailView(*issue, a.clientBaseURL(), a.width, a.height)
 				a.viewStack = append(a.viewStack, &dv)
 				a.inflight++ // extra inflight for comments
 				return a, tea.Batch(
@@ -850,9 +858,9 @@ func (a App) renderStatusBar() string {
 	}
 
 	if len(a.viewStack) > 0 {
-		parts = append(parts, helpStyle.Render("j/k: scroll  c: comment  esc: back  q: quit"))
+		parts = append(parts, helpStyle.Render("c: comment  d: done  del: delete  q: quit"))
 	} else {
-		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  c: create  r: refresh  1-9: tabs  q: quit"))
+		parts = append(parts, helpStyle.Render("/: filter  c: create  o: open  q: quit"))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,

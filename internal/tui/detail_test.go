@@ -327,8 +327,6 @@ func TestDetailViewInlineHotkeys(t *testing.T) {
 		{"(t)", "title hint"},
 		{"(e)", "description hint"},
 		{"(a,i)", "assignee hint"},
-		{"d: mark done", "done action hint"},
-		{"del: delete", "delete action hint"},
 	}
 	for _, h := range hints {
 		if !strings.Contains(content, h.text) {
