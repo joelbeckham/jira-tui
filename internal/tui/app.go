@@ -3,6 +3,9 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -863,7 +866,7 @@ func (a App) renderStatusBar() string {
 var editHotkeys = map[string]bool{
 	"s": true, "p": true, "d": true, "e": true,
 	"t": true, "i": true, "a": true, "delete": true,
-	"u": true, "y": true,
+	"u": true, "y": true, "o": true,
 }
 
 // handleEditHotkey processes edit hotkeys (s/p/d/e/t/i/a/del) for the given
@@ -901,6 +904,23 @@ func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea
 			a.flashIsErr = true
 		} else {
 			a.flash = "Copied URL"
+			a.flashIsErr = false
+		}
+		return a, nil, true
+
+	case "o":
+		// Open issue in default browser
+		if a.client == nil {
+			a.flash = "Not connected to Jira"
+			a.flashIsErr = true
+			return a, nil, true
+		}
+		url := a.client.BrowseURL(issue.Key)
+		if err := openBrowser(url); err != nil {
+			a.flash = "Could not open browser"
+			a.flashIsErr = true
+		} else {
+			a.flash = "Opened " + issue.Key + " in browser"
 			a.flashIsErr = false
 		}
 		return a, nil, true
@@ -996,6 +1016,37 @@ func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea
 	}
 
 	return a, nil, false
+}
+
+// openBrowser opens a URL in the user's default browser.
+// Handles native Linux, WSL, macOS, and Windows.
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	default: // linux, freebsd, etc.
+		// WSL: /proc/version contains "microsoft" or "Microsoft"
+		if data, err := os.ReadFile("/proc/version"); err == nil {
+			lower := strings.ToLower(string(data))
+			if strings.Contains(lower, "microsoft") {
+				// Prefer wslview (from wslu), fall back to cmd.exe
+				if path, err := exec.LookPath("wslview"); err == nil {
+					return exec.Command(path, url).Start()
+				}
+				return exec.Command("cmd.exe", "/c", "start", url).Start()
+			}
+		}
+		// Native Linux: try xdg-open, then sensible-browser
+		if path, err := exec.LookPath("xdg-open"); err == nil {
+			return exec.Command(path, url).Start()
+		}
+		if path, err := exec.LookPath("sensible-browser"); err == nil {
+			return exec.Command(path, url).Start()
+		}
+		return fmt.Errorf("no browser opener found (install xdg-utils)")
+	}
 }
 
 // overlayAction identifies which edit action the overlay result maps to.

@@ -12,6 +12,7 @@
 - **Quick create** — press `c` to create a new issue (summary → type → submit)
 - **Add comment** — press `c` on the detail view to add a comment
 - **Clipboard** — yank issue key (`y`) or copy URL (`u`)
+- **Open in browser** — press `o` to open the current issue in your default browser
 - **Detail view** — full scrollable issue detail with fields, subtasks, linked issues
 - **Priority icons** — colored Unicode icons in the issue list
 
@@ -97,6 +98,7 @@ make run
 | `c` | Create new issue (list) / Add comment (detail) |
 | `y` | Copy issue key |
 | `u` | Copy issue URL |
+| `o` | Open issue in browser |
 
 ## Project Structure
 
