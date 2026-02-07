@@ -77,7 +77,7 @@ make run
 | `enter` | Open issue detail |
 | `esc` | Go back / clear filter |
 | `1`-`9` | Switch tabs |
-| `/` | Quick filter |
+| `/` | Quick filter (`enter` or `↓` to confirm, `esc` to cancel) |
 | `r` | Refresh tab |
 | `q` | Quit |
 

@@ -686,8 +686,8 @@ func (a App) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
 	switch key {
-	case "enter":
-		// Confirm filter (or clear if empty)
+	case "enter", "down":
+		// Confirm filter (or clear if empty) and return to list
 		tab.quickFilter.apply(tab.issues, tab.columns)
 		tab.applyFilter()
 		return a, nil
