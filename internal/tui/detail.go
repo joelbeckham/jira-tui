@@ -77,7 +77,8 @@ type issueDetailView struct {
 	issue    jira.Issue
 	viewport viewport.Model
 	ready    bool
-	loading  bool
+	loading  bool  // true while the full issue fetch is in-flight
+	dirty    bool  // true if the issue was edited while this view was open
 	width    int
 	height   int
 }
@@ -89,6 +90,7 @@ func newIssueDetailView(issue jira.Issue, width, height int) issueDetailView {
 		height:  height,
 		loading: true,
 	}
+	v.buildViewport()
 	return v
 }
 
@@ -172,14 +174,19 @@ func (v *issueDetailView) renderContent() string {
 	b.WriteString("\n\n")
 
 	// Description (e)
-	desc := extractADFText(fields.Description)
-	if desc != "" {
+	if v.loading {
 		b.WriteString(detailSectionStyle.Render("Description") + " " + detailHintStyle.Render("(e)") + "\n")
-		b.WriteString(desc)
-		b.WriteString("\n")
+		b.WriteString(detailTypeStyle.Render("Loading…") + "\n")
 	} else {
-		b.WriteString(detailSectionStyle.Render("Description") + " " + detailHintStyle.Render("(e)") + "\n")
-		b.WriteString(detailTypeStyle.Render("No description") + "\n")
+		desc := extractADFText(fields.Description)
+		if desc != "" {
+			b.WriteString(detailSectionStyle.Render("Description") + " " + detailHintStyle.Render("(e)") + "\n")
+			b.WriteString(desc)
+			b.WriteString("\n")
+		} else {
+			b.WriteString(detailSectionStyle.Render("Description") + " " + detailHintStyle.Render("(e)") + "\n")
+			b.WriteString(detailTypeStyle.Render("No description") + "\n")
+		}
 	}
 
 	// Fields section
@@ -189,12 +196,18 @@ func (v *issueDetailView) renderContent() string {
 	b.WriteString(renderFieldHint("Assignee", userName(fields.Assignee, "Unassigned"), "a,i"))
 	b.WriteString(renderField("Reporter", userName(fields.Reporter, "")))
 	b.WriteString(renderField("Project", namedValue(fields.Project)))
-	b.WriteString(renderField("Labels", labelsValue(fields.Labels)))
+	if v.loading {
+		b.WriteString(renderField("Labels", "Loading…"))
+	} else {
+		b.WriteString(renderField("Labels", labelsValue(fields.Labels)))
+	}
 	b.WriteString(renderField("Created", formatDetailDate(fields.Created)))
 	b.WriteString(renderField("Updated", formatDetailDate(fields.Updated)))
 
-	// Subtasks
-	if len(fields.Subtasks) > 0 {
+	// Subtasks (only available from full fetch)
+	if v.loading {
+		// skip — subtask data not yet available
+	} else if len(fields.Subtasks) > 0 {
 		b.WriteString("\n")
 		b.WriteString(renderSection(fmt.Sprintf("Subtasks (%d)", len(fields.Subtasks)), maxWidth))
 		for _, sub := range fields.Subtasks {
@@ -211,8 +224,10 @@ func (v *issueDetailView) renderContent() string {
 		}
 	}
 
-	// Linked Issues
-	if len(fields.IssueLinks) > 0 {
+	// Linked Issues (only available from full fetch)
+	if v.loading {
+		// skip — link data not yet available
+	} else if len(fields.IssueLinks) > 0 {
 		b.WriteString("\n")
 		b.WriteString(renderSection(fmt.Sprintf("Linked Issues (%d)", len(fields.IssueLinks)), maxWidth))
 		for _, link := range fields.IssueLinks {
@@ -233,8 +248,8 @@ func (v *issueDetailView) renderContent() string {
 		}
 	}
 
-	// Parent (standalone section if not shown in header)
-	if fields.Parent != nil {
+	// Parent (standalone section if not shown in header, only from full fetch)
+	if !v.loading && fields.Parent != nil {
 		b.WriteString("\n")
 		b.WriteString(renderSection("Parent", maxWidth))
 		parentLabel := detailKeyStyle.Render(fields.Parent.Key)
@@ -263,9 +278,6 @@ func (v *issueDetailView) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the detail view viewport.
 func (v *issueDetailView) View() string {
-	if v.loading {
-		return loadingStyle.Render("Loading " + v.issue.Key + "...")
-	}
 	if !v.ready {
 		return loadingStyle.Render("Loading...")
 	}
@@ -284,6 +296,7 @@ func (v *issueDetailView) setSize(width, height int) {
 // updateIssue replaces the displayed issue and rebuilds the viewport content.
 func (v *issueDetailView) updateIssue(issue jira.Issue) {
 	v.issue = issue
+	v.dirty = true
 	if v.ready {
 		v.buildViewport()
 	}

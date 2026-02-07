@@ -142,6 +142,40 @@ func (t *tab) clearFilter() {
 	t.table.GotoTop()
 }
 
+// detailBaseFields are the Jira API field names always requested so the detail
+// view can render partial data immediately when opened from the list.
+var detailBaseFields = []string{
+	"summary", "status", "priority", "issuetype", "assignee",
+	"reporter", "project", "created", "updated",
+}
+
+// mergeSearchFields combines configured columns with the base fields needed by
+// the detail view, deduplicating and mapping column names to Jira API field names.
+func mergeSearchFields(columns []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	add := func(f string) {
+		// Map display column names to Jira API field names
+		switch f {
+		case "type":
+			f = "issuetype"
+		case "key":
+			return // key is always returned by the API
+		}
+		if !seen[f] {
+			seen[f] = true
+			result = append(result, f)
+		}
+	}
+	for _, f := range columns {
+		add(f)
+	}
+	for _, f := range detailBaseFields {
+		add(f)
+	}
+	return result
+}
+
 // issuesToRows converts issues to table rows based on the configured columns.
 // Priority columns display a colored icon instead of text.
 func issuesToRows(issues []jira.Issue, columns []string) []table.Row {

@@ -378,3 +378,54 @@ func TestTabSetIssuesClearsFilter(t *testing.T) {
 		t.Errorf("expected 1 issue, got %d", len(tab.issues))
 	}
 }
+
+func TestMergeSearchFields(t *testing.T) {
+	t.Run("adds detail base fields", func(t *testing.T) {
+		result := mergeSearchFields([]string{"key", "summary", "status"})
+		// "key" should be dropped (always returned), rest merged with base fields
+		want := map[string]bool{
+			"summary": true, "status": true, "priority": true,
+			"issuetype": true, "assignee": true, "reporter": true,
+			"project": true, "created": true, "updated": true,
+		}
+		got := make(map[string]bool)
+		for _, f := range result {
+			got[f] = true
+		}
+		for k := range want {
+			if !got[k] {
+				t.Errorf("expected field %q in result", k)
+			}
+		}
+		if got["key"] {
+			t.Error("key should not be in fields (always returned by API)")
+		}
+	})
+
+	t.Run("maps type to issuetype", func(t *testing.T) {
+		result := mergeSearchFields([]string{"type", "summary"})
+		got := make(map[string]bool)
+		for _, f := range result {
+			got[f] = true
+		}
+		if !got["issuetype"] {
+			t.Error("expected 'type' to be mapped to 'issuetype'")
+		}
+		if got["type"] {
+			t.Error("'type' should have been mapped to 'issuetype'")
+		}
+	})
+
+	t.Run("deduplicates", func(t *testing.T) {
+		result := mergeSearchFields([]string{"summary", "status", "priority"})
+		counts := make(map[string]int)
+		for _, f := range result {
+			counts[f]++
+		}
+		for f, c := range counts {
+			if c > 1 {
+				t.Errorf("field %q appears %d times", f, c)
+			}
+		}
+	})
+}

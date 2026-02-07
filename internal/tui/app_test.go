@@ -971,19 +971,13 @@ func TestIssueDeletedMsgRemovesFromTabs(t *testing.T) {
 	app := testAppReady()
 	origLen := len(app.tabs[0].issues)
 
+	// Success message is now a no-op (optimistic removal happened earlier)
 	model, _ := app.Update(issueDeletedMsg{issueKey: "PROJ-1"})
 	updated := model.(App)
 
-	if len(updated.tabs[0].issues) != origLen-1 {
-		t.Errorf("expected %d issues after delete, got %d", origLen-1, len(updated.tabs[0].issues))
-	}
-	for _, issue := range updated.tabs[0].issues {
-		if issue.Key == "PROJ-1" {
-			t.Error("PROJ-1 should have been removed from tab")
-		}
-	}
-	if !strings.Contains(updated.flash, "PROJ-1 deleted") {
-		t.Errorf("expected deletion flash, got: %s", updated.flash)
+	// Issues should NOT have been removed — that was done optimistically in handleOverlayResult
+	if len(updated.tabs[0].issues) != origLen {
+		t.Errorf("expected %d issues (no removal on success msg), got %d", origLen, len(updated.tabs[0].issues))
 	}
 }
 
@@ -997,11 +991,12 @@ func TestIssueDeletedMsgPopsDetailView(t *testing.T) {
 		t.Fatal("expected view stack to have detail view")
 	}
 
+	// Success message is now a no-op — detail view pop happens optimistically
 	model, _ = app.Update(issueDeletedMsg{issueKey: "PROJ-1"})
 	updated := model.(App)
 
-	if len(updated.viewStack) != 0 {
-		t.Error("expected detail view to be popped after deleting viewed issue")
+	if len(updated.viewStack) != 1 {
+		t.Error("expected detail view to remain (pop is now optimistic in handleOverlayResult)")
 	}
 }
 
@@ -1108,13 +1103,23 @@ func TestHandleOverlayResultDelete(t *testing.T) {
 	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
 	app.overlayIssue = "PROJ-1"
 	app.overlayAction = overlayActionDelete
+	origLen := len(app.tabs[0].issues)
 
 	model, cmd := app.handleOverlayResult(true)
 	updated := model.(App)
 	if cmd == nil {
 		t.Error("expected a cmd for delete")
 	}
-	if !strings.Contains(updated.flash, "Deleting") {
+	// Optimistic: issue should already be removed from tabs
+	if len(updated.tabs[0].issues) != origLen-1 {
+		t.Errorf("expected %d issues after optimistic delete, got %d", origLen-1, len(updated.tabs[0].issues))
+	}
+	for _, issue := range updated.tabs[0].issues {
+		if issue.Key == "PROJ-1" {
+			t.Error("PROJ-1 should have been removed optimistically")
+		}
+	}
+	if !strings.Contains(updated.flash, "deleted") {
 		t.Errorf("expected delete flash, got: %s", updated.flash)
 	}
 }

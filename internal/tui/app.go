@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -96,6 +97,28 @@ type view interface {
 	title() string
 }
 
+// boolToInt returns 1 if b is true, 0 otherwise.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// startNetwork increments the inflight counter and returns the cmd.
+// If this is the first in-flight request, it also starts the spinner tick.
+func (a *App) startNetwork(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	wasIdle := a.inflight == 0
+	a.inflight++
+	if wasIdle {
+		return tea.Batch(cmd, a.spinner.Tick)
+	}
+	return cmd
+}
+
 
 
 // --- App model ---
@@ -128,6 +151,9 @@ type App struct {
 
 	defaultProject string // project key for creating issues
 	createSummary  string // holds summary during multi-step create flow
+
+	spinner  spinner.Model // activity spinner
+	inflight int           // number of in-flight network requests
 }
 
 // NewApp creates a new App model.
@@ -137,11 +163,16 @@ func NewApp(client *jira.Client, tabs []config.TabConfig, defaultProject string)
 	for i, cfg := range tabs {
 		t[i] = newTab(cfg)
 	}
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 	return App{
 		client:         client,
 		checking:       client != nil,
 		tabs:           t,
 		defaultProject: defaultProject,
+		spinner:        s,
+		inflight:       boolToInt(client != nil), // checkConnection will be in-flight
 	}
 }
 
@@ -150,7 +181,7 @@ func (a App) Init() tea.Cmd {
 	if a.client == nil {
 		return nil
 	}
-	return a.checkConnection()
+	return tea.Batch(a.checkConnection(), a.spinner.Tick)
 }
 
 // checkConnection returns a Cmd that verifies Jira credentials.
@@ -190,7 +221,7 @@ func (a App) loadTab(index int) tea.Cmd {
 
 		result, err := client.SearchIssues(ctx, jira.SearchOptions{
 			JQL:        filter.JQL,
-			Fields:     cfg.Columns,
+			Fields:     mergeSearchFields(cfg.Columns),
 			MaxResults: 50,
 		})
 		if err != nil {
@@ -235,6 +266,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case connStatusMsg:
+		a.inflight--
 		a.checking = false
 		if msg.err != nil {
 			a.connErr = msg.err
@@ -244,10 +276,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Load user cache (non-blocking, best effort)
 			a.cachedUsers, _ = config.LoadUserCache()
 			// Auth succeeded — load all tabs eagerly
-			return a, a.loadAllTabs()
+			a.inflight += len(a.tabs)
+			return a, tea.Batch(a.loadAllTabs(), a.spinner.Tick)
 		}
 
 	case tabDataMsg:
+		a.inflight--
 		if msg.tabIndex >= 0 && msg.tabIndex < len(a.tabs) {
 			tab := &a.tabs[msg.tabIndex]
 			if msg.filter != nil {
@@ -261,6 +295,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case issueUpdatedMsg:
+		a.inflight--
 		a.flash = ""
 		if msg.err != nil {
 			a.flash = msg.err.Error()
@@ -276,6 +311,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.flashIsErr = msg.isErr
 
 	case issueDetailMsg:
+		a.inflight--
 		if msg.err != nil {
 			a.flash = fmt.Sprintf("Failed to load %s: %v", msg.issueKey, msg.err)
 			a.flashIsErr = true
@@ -288,17 +324,23 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-		} else if msg.issue != nil && len(a.viewStack) > 0 {
-			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
-				if dv.issue.Key == msg.issueKey {
-					dv.issue = *msg.issue
-					dv.loading = false
-					dv.buildViewport()
+		} else if msg.issue != nil {
+			// Patch updated data into tab list rows
+			a.applyIssueUpdate(msg.issueKey, msg.issue)
+			// Update the detail view if it's still showing this issue
+			if len(a.viewStack) > 0 {
+				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+					if dv.issue.Key == msg.issueKey {
+						dv.issue = *msg.issue
+						dv.loading = false
+						dv.buildViewport()
+					}
 				}
 			}
 		}
 
 	case transitionsLoadedMsg:
+		a.inflight--
 		if msg.err != nil {
 			a.flash = msg.err.Error()
 			a.flashIsErr = true
@@ -313,6 +355,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case prioritiesLoadedMsg:
+		a.inflight--
 		if msg.err != nil {
 			a.flash = msg.err.Error()
 			a.flashIsErr = true
@@ -328,6 +371,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case usersLoadedMsg:
+		a.inflight--
 		if msg.err != nil {
 			a.flash = msg.err.Error()
 			a.flashIsErr = true
@@ -342,34 +386,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case issueDeletedMsg:
-		a.flash = ""
+		a.inflight--
 		if msg.err != nil {
-			a.flash = msg.err.Error()
+			a.flash = "Delete failed: " + msg.err.Error()
 			a.flashIsErr = true
-		} else {
-			// Pop detail view if it's showing the deleted issue
-			if len(a.viewStack) > 0 {
-				if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
-					if dv.issue.Key == msg.issueKey {
-						a.viewStack = a.viewStack[:len(a.viewStack)-1]
-					}
-				}
-			}
-			// Remove from all tabs
-			for ti := range a.tabs {
-				for ii := range a.tabs[ti].issues {
-					if a.tabs[ti].issues[ii].Key == msg.issueKey {
-						a.tabs[ti].issues = append(a.tabs[ti].issues[:ii], a.tabs[ti].issues[ii+1:]...)
-						a.tabs[ti].applyFilter()
-						break
-					}
-				}
-			}
-			a.flash = msg.issueKey + " deleted"
-			a.flashIsErr = false
 		}
+		// Success is silent — the issue was already removed optimistically
 
 	case issueTypesLoadedMsg:
+		a.inflight--
 		if msg.err != nil {
 			a.flash = msg.err.Error()
 			a.flashIsErr = true
@@ -385,6 +410,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case issueCreatedMsg:
+		a.inflight--
 		a.flash = ""
 		if msg.err != nil {
 			a.flash = msg.err.Error()
@@ -398,12 +424,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.viewStack = append(a.viewStack, &dv)
 			var cmds []tea.Cmd
 			cmds = append(cmds, a.cmdFetchIssue(msg.issueKey))
-			// Also refresh the active tab to pick up the new issue
+			// Refresh the active tab in the background to pick up the new issue.
+			// Don't call setLoading() — keep the current list visible so esc-back is instant.
 			if a.connected && a.activeTab < len(a.tabs) {
-				a.tabs[a.activeTab].setLoading()
 				cmds = append(cmds, a.loadTab(a.activeTab))
 			}
 			return a, tea.Batch(cmds...)
+		}
+
+	case spinner.TickMsg:
+		if a.inflight > 0 {
+			var cmd tea.Cmd
+			a.spinner, cmd = a.spinner.Update(msg)
+			return a, cmd
 		}
 
 	case tea.KeyMsg:
@@ -439,11 +472,17 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "q":
 			return a, tea.Quit
 		case "esc":
+			// Capture the dirty issue key before popping the detail view
+			var dirtyKey string
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				if dv.dirty {
+					dirtyKey = dv.issue.Key
+				}
+			}
 			a.viewStack = a.viewStack[:len(a.viewStack)-1]
-			// Refresh the active tab in case the issue was edited or just created
-			if a.connected && a.activeTab < len(a.tabs) {
-				a.tabs[a.activeTab].setLoading()
-				return a, a.loadTab(a.activeTab)
+			// If the issue was edited, refresh just that issue in the background
+			if dirtyKey != "" && a.connected {
+				return a, a.cmdFetchIssue(dirtyKey)
 			}
 			return a, nil
 		}
@@ -488,7 +527,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Refresh active tab
 		if a.connected && a.activeTab < len(a.tabs) {
 			a.tabs[a.activeTab].setLoading()
-			return a, a.loadTab(a.activeTab)
+			return a, a.startNetwork(a.loadTab(a.activeTab))
 		}
 
 	case "c":
@@ -513,7 +552,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
 				dv := newIssueDetailView(*issue, a.width, a.height)
 				a.viewStack = append(a.viewStack, &dv)
-				return a, a.cmdFetchIssue(issue.Key)
+				return a, a.startNetwork(a.cmdFetchIssue(issue.Key))
 			}
 		}
 
@@ -946,7 +985,26 @@ func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
 		})
 
 	case overlayActionDelete:
-		a.flash = "Deleting " + issueKey + "..."
+		// Optimistic delete: remove from UI immediately, send API call in background
+		// Pop detail view if it's showing the deleted issue
+		if len(a.viewStack) > 0 {
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				if dv.issue.Key == issueKey {
+					a.viewStack = a.viewStack[:len(a.viewStack)-1]
+				}
+			}
+		}
+		// Remove from all tabs
+		for ti := range a.tabs {
+			for ii := range a.tabs[ti].issues {
+				if a.tabs[ti].issues[ii].Key == issueKey {
+					a.tabs[ti].issues = append(a.tabs[ti].issues[:ii], a.tabs[ti].issues[ii+1:]...)
+					a.tabs[ti].applyFilterKeepCursor(issueKey)
+					break
+				}
+			}
+		}
+		a.flash = issueKey + " deleted"
 		a.flashIsErr = false
 		return a, a.cmdDeleteIssue(issueKey)
 
