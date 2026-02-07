@@ -109,6 +109,32 @@ func (t *tab) applyFilter() {
 	t.table.GotoTop()
 }
 
+// applyFilterKeepCursor updates table rows but preserves the cursor position.
+// If the previously selected issue is still visible, the cursor stays on it.
+// Otherwise the cursor stays at the same numeric index (clamped to bounds).
+func (t *tab) applyFilterKeepCursor(selectedKey string) {
+	visible := t.quickFilter.visibleIssues(t.issues)
+	oldCursor := t.table.Cursor()
+	t.table.SetRows(issuesToRows(visible, t.columns))
+
+	// Try to find the previously selected issue by key
+	for i, issue := range visible {
+		if issue.Key == selectedKey {
+			t.table.SetCursor(i)
+			return
+		}
+	}
+
+	// Fall back to same index, clamped
+	if oldCursor >= len(visible) {
+		oldCursor = len(visible) - 1
+	}
+	if oldCursor < 0 {
+		oldCursor = 0
+	}
+	t.table.SetCursor(oldCursor)
+}
+
 // clearFilter removes the quick filter and restores the full issue list.
 func (t *tab) clearFilter() {
 	t.quickFilter.clear()

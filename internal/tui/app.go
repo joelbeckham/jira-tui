@@ -954,8 +954,8 @@ func (a *App) applyIssueUpdate(issueKey string, updated *jira.Issue) {
 		for ii := range a.tabs[ti].issues {
 			if a.tabs[ti].issues[ii].Key == issueKey {
 				a.tabs[ti].issues[ii] = *updated
-				// Re-apply filter and rebuild table rows
-				a.tabs[ti].applyFilter()
+				// Re-apply filter and rebuild table rows, keeping cursor on the same issue
+				a.tabs[ti].applyFilterKeepCursor(issueKey)
 				break
 			}
 		}
