@@ -440,6 +440,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "esc":
 			a.viewStack = a.viewStack[:len(a.viewStack)-1]
+			// Refresh the active tab in case the issue was edited or just created
+			if a.connected && a.activeTab < len(a.tabs) {
+				a.tabs[a.activeTab].setLoading()
+				return a, a.loadTab(a.activeTab)
+			}
 			return a, nil
 		}
 		// Edit hotkeys on the detail view's issue
