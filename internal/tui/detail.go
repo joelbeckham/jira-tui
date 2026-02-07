@@ -97,6 +97,8 @@ type issueDetailView struct {
 	dirty           bool // true if the issue was edited while this view was open
 	comments        []jira.Comment
 	commentsLoading bool
+	children        []jira.Issue // child issues (parent = this issue)
+	childrenLoading bool
 	width           int
 	height          int
 }
@@ -109,6 +111,7 @@ func newIssueDetailView(issue jira.Issue, baseURL string, width, height int) iss
 		height:          height,
 		loading:         true,
 		commentsLoading: true,
+		childrenLoading: true,
 	}
 	v.buildViewport()
 	return v
@@ -240,6 +243,31 @@ func (v *issueDetailView) renderContent() string {
 				icon,
 				detailKeyStyle.Render(sub.Key),
 				sub.Fields.Summary,
+			))
+		}
+	}
+
+	// Children (fetched via JQL: parent = KEY)
+	if v.childrenLoading {
+		// skip — children data not yet available
+	} else if len(v.children) > 0 {
+		b.WriteString("\n")
+		b.WriteString(renderSection(fmt.Sprintf("Children (%d)", len(v.children)), maxWidth))
+		for _, child := range v.children {
+			icon := detailSubtaskOpen.Render("·")
+			if child.Fields.Status != nil && child.Fields.Status.StatusCategory != nil &&
+				child.Fields.Status.StatusCategory.Key == "done" {
+				icon = detailSubtaskDone.Render("✓")
+			}
+			typeName := ""
+			if child.Fields.IssueType != nil {
+				typeName = issueTypeColor(child.Fields.IssueType.Name).Render(child.Fields.IssueType.Name) + " "
+			}
+			b.WriteString(fmt.Sprintf("  %s %s%s  %s\n",
+				icon,
+				typeName,
+				detailKeyStyle.Render(child.Key),
+				child.Fields.Summary,
 			))
 		}
 	}
@@ -467,7 +495,22 @@ func (v *issueDetailView) relatedIssues() []selectionItem {
 		})
 	}
 
-	// 3. Linked Issues
+	// 3. Children (fetched via JQL, e.g. Epic children)
+	for _, child := range v.children {
+		typeName := "Child"
+		if child.Fields.IssueType != nil {
+			typeName = child.Fields.IssueType.Name
+		}
+		items = append(items, selectionItem{
+			ID:      child.Key,
+			Label:   child.Key + " " + child.Fields.Summary + " " + typeName,
+			Icon:    relSubtaskStyle.Render("▼"),
+			Display: relationTag(typeName, relSubtaskStyle) + "  " + detailKeyStyle.Render(child.Key) + "  " + child.Fields.Summary,
+			Desc:    typeName,
+		})
+	}
+
+	// 4. Linked Issues
 	for _, link := range fields.IssueLinks {
 		if link.OutwardIssue != nil {
 			items = append(items, selectionItem{

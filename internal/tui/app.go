@@ -99,6 +99,13 @@ type commentsLoadedMsg struct {
 	err      error
 }
 
+// childrenLoadedMsg delivers child issues (parent=KEY) for the detail view.
+type childrenLoadedMsg struct {
+	issueKey string
+	children []jira.Issue
+	err      error
+}
+
 // commentAddedMsg is sent after a comment is posted to the API.
 type commentAddedMsg struct {
 	issueKey string
@@ -386,6 +393,20 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case childrenLoadedMsg:
+		a.inflight--
+		if len(a.viewStack) > 0 {
+			if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+				if dv.issue.Key == msg.issueKey {
+					if msg.err == nil {
+						dv.children = msg.children
+					}
+					dv.childrenLoading = false
+					dv.buildViewport()
+				}
+			}
+		}
+
 	case commentAddedMsg:
 		a.inflight--
 		if msg.err != nil {
@@ -500,7 +521,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmds []tea.Cmd
 			cmds = append(cmds, a.cmdFetchIssue(msg.issueKey))
 			cmds = append(cmds, a.cmdFetchComments(msg.issueKey))
-			a.inflight++ // extra inflight for comments
+			cmds = append(cmds, a.cmdFetchChildren(msg.issueKey))
+			a.inflight += 2 // extra inflight for comments + children
 			// Refresh the active tab in the background to pick up the new issue.
 			// Don't call setLoading() — keep the current list visible so esc-back is instant.
 			if a.connected && a.activeTab < len(a.tabs) {
@@ -653,10 +675,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if issue := a.tabs[a.activeTab].selectedIssue(); issue != nil {
 				dv := newIssueDetailView(*issue, a.clientBaseURL(), a.width, a.height)
 				a.viewStack = append(a.viewStack, &dv)
-				a.inflight++ // extra inflight for comments
+				a.inflight += 2 // extra inflight for comments + children
 				return a, tea.Batch(
 					a.startNetwork(a.cmdFetchIssue(issue.Key)),
 					a.cmdFetchComments(issue.Key),
+					a.cmdFetchChildren(issue.Key),
 				)
 			}
 		}
@@ -1190,10 +1213,11 @@ func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
 		stub := jira.Issue{Key: item.ID}
 		dv := newIssueDetailView(stub, a.clientBaseURL(), a.width, a.height)
 		a.viewStack = append(a.viewStack, &dv)
-		a.inflight++
+		a.inflight += 2
 		return a, tea.Batch(
 			a.startNetwork(a.cmdFetchIssue(item.ID)),
 			a.cmdFetchComments(item.ID),
+			a.cmdFetchChildren(item.ID),
 		)
 
 	case overlayActionAddComment:
@@ -1234,6 +1258,25 @@ func (a App) cmdFetchIssue(issueKey string) tea.Cmd {
 			return issueDetailMsg{issueKey: issueKey, err: err}
 		}
 		return issueDetailMsg{issueKey: issueKey, issue: issue}
+	}
+}
+
+// cmdFetchChildren searches for child issues (parent = KEY) for the detail view.
+func (a App) cmdFetchChildren(issueKey string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	return func() tea.Msg {
+		result, err := client.SearchIssues(context.Background(), jira.SearchOptions{
+			JQL:        fmt.Sprintf("parent = %s ORDER BY rank ASC", issueKey),
+			Fields:     []string{"summary", "status", "issuetype", "priority"},
+			MaxResults: 50,
+		})
+		if err != nil {
+			return childrenLoadedMsg{issueKey: issueKey, err: err}
+		}
+		return childrenLoadedMsg{issueKey: issueKey, children: result.Issues}
 	}
 }
 
