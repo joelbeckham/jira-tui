@@ -1,10 +1,88 @@
 # jira-tui
 
-> A terminal user interface for Jira. (Details TBD)
+> A fast, minimalist, keyboard-driven terminal UI for Jira Cloud.
+
+## Features
+
+- **Filter tabs** — configure multiple saved Jira filters as tabs, each with custom columns
+- **Vim-style navigation** — `j`/`k` to move, `enter` to open detail view, `esc` to go back
+- **Quick filter** — press `/` to filter issues client-side by text
+- **Inline editing** — change status (`s`), priority (`p`), assignee (`a`), title (`t`), description (`e`) via overlays
+- **Quick actions** — assign to me (`i`), mark done (`d`), delete (`del`)
+- **Quick create** — press `c` to create a new issue (summary → type → submit)
+- **Clipboard** — yank issue key (`y`) or copy URL (`u`)
+- **Detail view** — full scrollable issue detail with fields, subtasks, linked issues
+- **Priority icons** — colored Unicode icons in the issue list
 
 ## Getting Started
 
-(To be filled in once the tech stack and build setup are defined.)
+### Prerequisites
+
+- Go 1.24+
+- A Jira Cloud instance with API access
+
+### Configuration
+
+1. Copy `config.example.yaml` to `config.yaml` and edit:
+
+```yaml
+jira:
+  base_url: https://yourcompany.atlassian.net
+  default_project: PROJ  # used by 'c' (create issue) hotkey
+
+tabs:
+  - label: "My Sprint"
+    filter_id: "10042"
+    columns: [key, summary, status, assignee, priority]
+    sort: priority
+```
+
+2. Create `secrets.yaml` with your credentials:
+
+```yaml
+jira:
+  email: you@company.com
+  api_token: your-api-token
+```
+
+### Build & Run
+
+```bash
+make build
+make run
+```
+
+## Keyboard Shortcuts
+
+### Navigation
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move down / up |
+| `enter` | Open issue detail |
+| `esc` | Go back / clear filter |
+| `1`-`9` | Switch tabs |
+| `/` | Quick filter |
+| `r` | Refresh tab |
+| `q` | Quit |
+
+### Editing (list & detail views)
+| Key | Action |
+|-----|--------|
+| `s` | Change status |
+| `p` | Change priority |
+| `a` | Change assignee |
+| `t` | Edit title |
+| `e` | Edit description |
+| `i` | Assign to me |
+| `d` | Mark as done |
+| `del` | Delete issue |
+
+### Other
+| Key | Action |
+|-----|--------|
+| `c` | Create new issue |
+| `y` | Copy issue key |
+| `u` | Copy issue URL |
 
 ## Project Structure
 

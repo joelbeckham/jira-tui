@@ -3,6 +3,7 @@
 
 jira:
   base_url: https://yourcompany.atlassian.net
+  default_project: PROJ  # used by 'c' (create issue) hotkey
 
 tabs:
   - label: "My Sprint"

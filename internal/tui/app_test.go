@@ -17,12 +17,12 @@ func testAppWithTabs() App {
 		{Label: "Sprint", FilterID: "111", Columns: []string{"key", "summary", "status"}},
 		{Label: "Backlog", FilterID: "222", Columns: []string{"key", "summary"}},
 	}
-	app := NewApp(nil, tabs)
+	app := NewApp(nil, tabs, "")
 	return app
 }
 
 func TestAppInit(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	cmd := app.Init()
 	if cmd != nil {
 		t.Error("Init() should return nil cmd when no client")
@@ -31,7 +31,7 @@ func TestAppInit(t *testing.T) {
 
 func TestAppInitWithClient(t *testing.T) {
 	client := jira.NewClient("https://example.atlassian.net", "test@example.com", "token")
-	app := NewApp(client, nil)
+	app := NewApp(client, nil, "")
 	cmd := app.Init()
 	if cmd == nil {
 		t.Error("Init() should return a cmd when client is set")
@@ -42,7 +42,7 @@ func TestAppInitWithClient(t *testing.T) {
 }
 
 func TestAppQuitOnQ(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	if cmd == nil {
 		t.Fatal("expected quit command, got nil")
@@ -54,7 +54,7 @@ func TestAppQuitOnQ(t *testing.T) {
 }
 
 func TestAppQuitOnCtrlC(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {
 		t.Fatal("expected quit command, got nil")
@@ -66,7 +66,7 @@ func TestAppQuitOnCtrlC(t *testing.T) {
 }
 
 func TestAppHandlesWindowSize(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	updated := model.(App)
 	if updated.width != 80 || updated.height != 24 {
@@ -78,7 +78,7 @@ func TestAppHandlesWindowSize(t *testing.T) {
 }
 
 func TestAppViewBeforeReady(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	view := app.View()
 	if !strings.Contains(view, "Loading") {
 		t.Errorf("expected loading message, got: %s", view)
@@ -99,7 +99,7 @@ func TestAppViewAfterReady(t *testing.T) {
 }
 
 func TestAppConnStatusSuccess(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	app.ready = true
 	app.checking = true
 
@@ -126,7 +126,7 @@ func TestAppConnStatusSuccess(t *testing.T) {
 }
 
 func TestAppConnStatusError(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	app.ready = true
 	app.checking = true
 
@@ -147,7 +147,7 @@ func TestAppConnStatusError(t *testing.T) {
 }
 
 func TestAppViewConnecting(t *testing.T) {
-	app := NewApp(nil, nil)
+	app := NewApp(nil, nil, "")
 	app.ready = true
 	app.checking = true
 	view := app.View()
@@ -291,7 +291,7 @@ func TestAppTabsInitializedFromConfig(t *testing.T) {
 		{Label: "B", FilterID: "2"},
 		{Label: "C", FilterID: "3"},
 	}
-	app := NewApp(nil, tabs)
+	app := NewApp(nil, tabs, "")
 	if len(app.tabs) != 3 {
 		t.Errorf("expected 3 tabs, got %d", len(app.tabs))
 	}

@@ -76,6 +76,18 @@ type issueDeletedMsg struct {
 	err      error
 }
 
+// issueTypesLoadedMsg delivers issue types for the create overlay.
+type issueTypesLoadedMsg struct {
+	types []jira.IssueType
+	err   error
+}
+
+// issueCreatedMsg is sent after a successful issue creation.
+type issueCreatedMsg struct {
+	issueKey string
+	err      error
+}
+
 // --- View stack ---
 
 // view is a stacked view that renders on top of the tab bar.
@@ -113,19 +125,23 @@ type App struct {
 
 	cachedUsers      []config.CachedUser // loaded at startup from user cache
 	cachedPriorities []jira.Priority     // loaded on first use from API
+
+	defaultProject string // project key for creating issues
+	createSummary  string // holds summary during multi-step create flow
 }
 
 // NewApp creates a new App model.
 // Pass nil client to run without Jira connection (for testing).
-func NewApp(client *jira.Client, tabs []config.TabConfig) App {
+func NewApp(client *jira.Client, tabs []config.TabConfig, defaultProject string) App {
 	t := make([]tab, len(tabs))
 	for i, cfg := range tabs {
 		t[i] = newTab(cfg)
 	}
 	return App{
-		client:   client,
-		checking: client != nil,
-		tabs:     t,
+		client:         client,
+		checking:       client != nil,
+		tabs:           t,
+		defaultProject: defaultProject,
 	}
 }
 
@@ -353,6 +369,43 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.flashIsErr = false
 		}
 
+	case issueTypesLoadedMsg:
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+			a.overlay = nil
+			a.overlayAction = overlayActionNone
+		} else {
+			items := make([]selectionItem, len(msg.types))
+			for i, t := range msg.types {
+				items[i] = selectionItem{ID: t.ID, Label: t.Name}
+			}
+			a.overlay = newSelectionOverlay("Issue Type", items)
+			// overlayAction was already set to overlayActionCreateType
+		}
+
+	case issueCreatedMsg:
+		a.flash = ""
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+		} else {
+			a.flash = "Created " + msg.issueKey
+			a.flashIsErr = false
+			// Push detail view for the new issue and fetch its data
+			stub := jira.Issue{Key: msg.issueKey}
+			dv := newIssueDetailView(stub, a.width, a.height)
+			a.viewStack = append(a.viewStack, &dv)
+			var cmds []tea.Cmd
+			cmds = append(cmds, a.cmdFetchIssue(msg.issueKey))
+			// Also refresh the active tab to pick up the new issue
+			if a.connected && a.activeTab < len(a.tabs) {
+				a.tabs[a.activeTab].setLoading()
+				cmds = append(cmds, a.loadTab(a.activeTab))
+			}
+			return a, tea.Batch(cmds...)
+		}
+
 	case tea.KeyMsg:
 		a.flash = "" // clear flash on any keypress
 		return a.handleKey(msg)
@@ -432,6 +485,22 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.tabs[a.activeTab].setLoading()
 			return a, a.loadTab(a.activeTab)
 		}
+
+	case "c":
+		// Create new issue
+		if a.client == nil {
+			a.flash = "Not connected to Jira"
+			a.flashIsErr = true
+			return a, nil
+		}
+		if a.defaultProject == "" {
+			a.flash = "Set default_project in config to create issues"
+			a.flashIsErr = true
+			return a, nil
+		}
+		a.overlay = newTextInputOverlay("New Issue Summary", "")
+		a.overlayAction = overlayActionCreateSummary
+		return a, nil
 
 	case "enter":
 		// Push issue detail onto stack and fetch full issue
@@ -654,7 +723,7 @@ func (a App) renderStatusBar() string {
 	if len(a.viewStack) > 0 {
 		parts = append(parts, helpStyle.Render("j/k: scroll  esc: back  q: quit"))
 	} else {
-		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  r: refresh  1-9: tabs  q: quit"))
+		parts = append(parts, helpStyle.Render("j/k: navigate  enter: open  /: filter  c: create  r: refresh  1-9: tabs  q: quit"))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
@@ -814,6 +883,8 @@ const (
 	overlayActionTitle
 	overlayActionDescription
 	overlayActionDelete
+	overlayActionCreateSummary // step 1: enter summary
+	overlayActionCreateType    // step 2: pick issue type
 )
 
 // handleOverlayResult processes the result of a completed overlay and dispatches
@@ -873,6 +944,28 @@ func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
 		a.flash = "Deleting " + issueKey + "..."
 		a.flashIsErr = false
 		return a, a.cmdDeleteIssue(issueKey)
+
+	case overlayActionCreateSummary:
+		summary := result.(string)
+		if strings.TrimSpace(summary) == "" {
+			a.flash = "Summary cannot be empty"
+			a.flashIsErr = true
+			return a, nil
+		}
+		// Store summary and move to step 2: pick issue type
+		a.createSummary = summary
+		a.overlayAction = overlayActionCreateType
+		a.flash = "Loading issue types..."
+		a.flashIsErr = false
+		return a, a.cmdFetchIssueTypes()
+
+	case overlayActionCreateType:
+		item := result.(*selectionItem)
+		summary := a.createSummary
+		a.createSummary = ""
+		a.flash = "Creating issue..."
+		a.flashIsErr = false
+		return a, a.cmdCreateIssue(summary, item.Label)
 	}
 
 	return a, nil
@@ -1069,5 +1162,44 @@ func (a App) cmdFetchAndCacheUsers() tea.Cmd {
 		_ = config.SaveUserCache(cached)
 
 		return usersLoadedMsg{users: cached}
+	}
+}
+
+// cmdFetchIssueTypes fetches issue types for the default project.
+func (a App) cmdFetchIssueTypes() tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	project := a.defaultProject
+	return func() tea.Msg {
+		types, err := client.GetProjectIssueTypes(context.Background(), project)
+		if err != nil {
+			return issueTypesLoadedMsg{err: fmt.Errorf("get issue types: %w", err)}
+		}
+		return issueTypesLoadedMsg{types: types}
+	}
+}
+
+// cmdCreateIssue creates a new issue with the given summary and type.
+func (a App) cmdCreateIssue(summary, issueTypeName string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	project := a.defaultProject
+	return func() tea.Msg {
+		req := jira.CreateIssueRequest{
+			Fields: map[string]interface{}{
+				"project":   map[string]interface{}{"key": project},
+				"summary":   summary,
+				"issuetype": map[string]interface{}{"name": issueTypeName},
+			},
+		}
+		resp, err := client.CreateIssue(context.Background(), req)
+		if err != nil {
+			return issueCreatedMsg{err: fmt.Errorf("create issue: %w", err)}
+		}
+		return issueCreatedMsg{issueKey: resp.Key}
 	}
 }

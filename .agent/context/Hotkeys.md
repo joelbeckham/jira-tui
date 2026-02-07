@@ -11,8 +11,9 @@ When on list screen, whatever item is highlighted gets the changes.
 - a: choose assignee. shows assignee drop down. enter to select (automatically saves) and esc to abort. works on both the list and the details view.
 - del: deletes issue (with confirmation first y or n (or esc))
 - u: copy url to jira issue to clipboard
-- k: copy issue key issue to clipboard
+- y: yank (copy) issue key to clipboard
 
 ## List View
+- c: create new issue (summary → issue type → submit)
 - shift + number sorts the view by that column number. Pressing again sorts the other way. And again removes sorting. Sorting is per tab and is preserved across tab changes and drill ins as well as when esc is pressed.
 

@@ -276,6 +276,36 @@ func (c *Client) GetPriorities(ctx context.Context) ([]Priority, error) {
 	return priorities, nil
 }
 
+// IssueType represents a Jira issue type for a specific project.
+type IssueType struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Subtask     bool   `json:"subtask"`
+	Description string `json:"description,omitempty"`
+}
+
+// GetProjectIssueTypes fetches available issue types for a project.
+func (c *Client) GetProjectIssueTypes(ctx context.Context, projectKey string) ([]IssueType, error) {
+	path := fmt.Sprintf("/rest/api/3/project/%s/statuses", projectKey)
+	data, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting issue types for %s: %w", projectKey, err)
+	}
+	// The /project/{key}/statuses endpoint returns [{id, name, subtask, statuses: [...]}]
+	var result []IssueType
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("parsing issue types: %w", err)
+	}
+	// Filter out subtask types — create flow should only offer standard types
+	var types []IssueType
+	for _, t := range result {
+		if !t.Subtask {
+			types = append(types, t)
+		}
+	}
+	return types, nil
+}
+
 // SearchAllUsers fetches all active users from the instance.
 // The Jira API returns users in pages; this method paginates through all results.
 func (c *Client) SearchAllUsers(ctx context.Context) ([]User, error) {

@@ -11,6 +11,7 @@
 | Board         | A Jira view showing issues organized by status      |
 | Filter Tab    | A TUI tab backed by a Jira saved filter, displaying matching issues |
 | Quick Filter  | Client-side text filter that narrows the visible issue list without API calls |
+| Quick Create  | Multi-step overlay flow (c hotkey) to create an issue with summary + type |
 | View Stack    | Push/pop navigation layered on top of the tab bar (e.g., issue detail) |
 | Saved Filter  | A Jira server-side filter defined by JQL, referenced by filter ID |
 | JQL           | Jira Query Language — the query syntax for searching issues |

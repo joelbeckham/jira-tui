@@ -43,9 +43,10 @@ internal/
 
 ## Current Status
 
-- **Phase:** Issue editing — overlay system, field editing from list + detail views
-- **Completed specs:** 001 (foundation), 002 (filter tabs + issue list), 003 (quick filter bar)
+- **Phase:** Quick-create issue, clipboard copy, dynamic priorities
+- **Completed specs:** 001 (foundation), 002 (filter tabs + issue list), 003 (quick filter bar), 005 (quick-create issue)
 - **Also done:** Priority icons, search API migration, detail view, ADF extraction,
   overlay system (selection/textinput/textarea/confirm), all hotkey editing
-  (s/p/d/i/a/t/e/del), user cache, async transition + user fetching
-- **Next:** Quick-create issue (c), cache layer
+  (s/p/d/i/a/t/e/del), user cache, async transition + user + priority fetching,
+  clipboard copy (y/u), quick-create issue (c), cursor preservation on update
+- **Next:** Cache layer, column sorting
