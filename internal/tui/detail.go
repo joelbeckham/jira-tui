@@ -404,4 +404,53 @@ func formatDetailDate(s string) string {
 	return s
 }
 
+// relatedIssues returns selection items for all drillable issues (parent,
+// subtasks, linked issues) in a consistent order.
+func (v *issueDetailView) relatedIssues() []selectionItem {
+	var items []selectionItem
+	fields := v.issue.Fields
+
+	// 1. Parent
+	if fields.Parent != nil {
+		summary := ""
+		if fields.Parent.Fields != nil {
+			summary = fields.Parent.Fields.Summary
+		}
+		items = append(items, selectionItem{
+			ID:    fields.Parent.Key,
+			Label: fields.Parent.Key + "  " + summary,
+			Desc:  "Parent",
+		})
+	}
+
+	// 2. Subtasks
+	for _, sub := range fields.Subtasks {
+		items = append(items, selectionItem{
+			ID:    sub.Key,
+			Label: sub.Key + "  " + sub.Fields.Summary,
+			Desc:  "Subtask",
+		})
+	}
+
+	// 3. Linked Issues
+	for _, link := range fields.IssueLinks {
+		if link.OutwardIssue != nil {
+			items = append(items, selectionItem{
+				ID:    link.OutwardIssue.Key,
+				Label: link.OutwardIssue.Key + "  " + link.OutwardIssue.Fields.Summary,
+				Desc:  link.Type.Outward,
+			})
+		}
+		if link.InwardIssue != nil {
+			items = append(items, selectionItem{
+				ID:    link.InwardIssue.Key,
+				Label: link.InwardIssue.Key + "  " + link.InwardIssue.Fields.Summary,
+				Desc:  link.Type.Inward,
+			})
+		}
+	}
+
+	return items
+}
+
 

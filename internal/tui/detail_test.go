@@ -334,3 +334,60 @@ func TestDetailViewInlineHotkeys(t *testing.T) {
 		}
 	}
 }
+
+func TestRelatedIssuesOrder(t *testing.T) {
+	issue := testDetailIssue()
+	issue.Fields.Parent = &jira.ParentIssue{
+		Key:    "PARENT-1",
+		Fields: &jira.IssueFields{Summary: "Parent task"},
+	}
+	issue.Fields.Subtasks = []jira.Issue{
+		{Key: "SUB-1", Fields: jira.IssueFields{Summary: "Subtask one"}},
+		{Key: "SUB-2", Fields: jira.IssueFields{Summary: "Subtask two"}},
+	}
+	issue.Fields.IssueLinks = []jira.IssueLink{
+		{
+			Type:         jira.LinkType{Outward: "blocks"},
+			OutwardIssue: &jira.Issue{Key: "LINK-1", Fields: jira.IssueFields{Summary: "Blocked issue"}},
+		},
+		{
+			Type:        jira.LinkType{Inward: "is blocked by"},
+			InwardIssue: &jira.Issue{Key: "LINK-2", Fields: jira.IssueFields{Summary: "Blocking issue"}},
+		},
+	}
+
+	dv := newIssueDetailViewReady(issue, 80, 24)
+	items := dv.relatedIssues()
+
+	if len(items) != 5 {
+		t.Fatalf("expected 5 related issues, got %d", len(items))
+	}
+
+	// Order: parent, subtasks, linked
+	expected := []struct {
+		id   string
+		desc string
+	}{
+		{"PARENT-1", "Parent"},
+		{"SUB-1", "Subtask"},
+		{"SUB-2", "Subtask"},
+		{"LINK-1", "blocks"},
+		{"LINK-2", "is blocked by"},
+	}
+	for i, exp := range expected {
+		if items[i].ID != exp.id {
+			t.Errorf("item %d: expected ID %q, got %q", i, exp.id, items[i].ID)
+		}
+		if items[i].Desc != exp.desc {
+			t.Errorf("item %d: expected Desc %q, got %q", i, exp.desc, items[i].Desc)
+		}
+	}
+}
+
+func TestRelatedIssuesEmpty(t *testing.T) {
+	dv := newIssueDetailViewReady(testDetailIssue(), 80, 24)
+	items := dv.relatedIssues()
+	if len(items) != 0 {
+		t.Errorf("expected 0 related issues, got %d", len(items))
+	}
+}

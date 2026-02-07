@@ -52,5 +52,5 @@ internal/
   optimistic detail view (instant open with partial data), background refresh on
   esc-back, optimistic delete, detail view comments (optimistic loading),
   init command (.jira-tui directory auto-setup), add comment from detail view (c),
-  open in browser (o)
+  open in browser (o), drill into related issues (enter from detail view)
 - **Next:** Cache layer, column sorting

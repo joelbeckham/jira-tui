@@ -14,6 +14,7 @@
 - **Clipboard** — yank issue key (`y`) or copy URL (`u`)
 - **Open in browser** — press `o` to open the current issue in your default browser
 - **Detail view** — full scrollable issue detail with fields, subtasks, linked issues
+- **Drill into related issues** — press `enter` on the detail view to navigate to parent, subtask, or linked issues
 - **Priority icons** — colored Unicode icons in the issue list
 
 ## Getting Started
@@ -74,7 +75,7 @@ make run
 |-----|--------|
 | `j` / `k` | Move down / up |
 | `home` / `end` | Jump to top / bottom |
-| `enter` | Open issue detail |
+| `enter` | Open issue detail / drill into related issue |
 | `esc` | Go back / clear filter |
 | `1`-`9` | Switch tabs |
 | `/` | Quick filter (`enter` or `↓` to confirm, `esc` to cancel) |

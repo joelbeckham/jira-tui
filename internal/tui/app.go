@@ -565,6 +565,18 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		// Detail-view-specific hotkeys
 		if dv, ok := a.viewStack[len(a.viewStack)-1].(*issueDetailView); ok {
+			if key == "enter" {
+				// Drill into related issue (parent / subtask / linked)
+				items := dv.relatedIssues()
+				if len(items) == 0 {
+					a.flash = "No related issues"
+					a.flashIsErr = false
+					return a, nil
+				}
+				a.overlay = newSelectionOverlay("Related Issues", items)
+				a.overlayAction = overlayActionDrillIn
+				return a, nil
+			}
 			if key == "c" {
 				// Add comment
 				if a.client == nil {
@@ -858,7 +870,7 @@ func (a App) renderStatusBar() string {
 	}
 
 	if len(a.viewStack) > 0 {
-		parts = append(parts, helpStyle.Render("c: comment  d: done  del: delete  q: quit"))
+		parts = append(parts, helpStyle.Render("enter: related  c: comment  d: done  del: delete  q: quit"))
 	} else {
 		parts = append(parts, helpStyle.Render("/: filter  c: create  o: open  q: quit"))
 	}
@@ -1071,6 +1083,7 @@ const (
 	overlayActionCreateSummary // step 1: enter summary
 	overlayActionCreateType    // step 2: pick issue type
 	overlayActionAddComment    // add comment from detail view
+	overlayActionDrillIn       // drill into a related issue from detail view
 )
 
 // handleOverlayResult processes the result of a completed overlay and dispatches
@@ -1171,6 +1184,17 @@ func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
 		a.flash = "Creating issue..."
 		a.flashIsErr = false
 		return a, a.cmdCreateIssue(summary, item.Label)
+
+	case overlayActionDrillIn:
+		item := result.(*selectionItem)
+		stub := jira.Issue{Key: item.ID}
+		dv := newIssueDetailView(stub, a.clientBaseURL(), a.width, a.height)
+		a.viewStack = append(a.viewStack, &dv)
+		a.inflight++
+		return a, tea.Batch(
+			a.startNetwork(a.cmdFetchIssue(item.ID)),
+			a.cmdFetchComments(item.ID),
+		)
 
 	case overlayActionAddComment:
 		text := result.(string)
