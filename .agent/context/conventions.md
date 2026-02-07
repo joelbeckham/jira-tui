@@ -26,7 +26,7 @@
 ## Project Structure
 
 ```
-cmd/jira-tui/          # Entry point (main.go)
+cmd/jira-tui/          # Entry point (main.go) — init subcommand, auto-init
 internal/
   tui/                 # Bubbletea models, views, key handling, styles
     app.go             # Root model (App), Update, View, key routing, overlay dispatch
@@ -39,7 +39,11 @@ internal/
     columns.go         # Auto-proportional column width builder
     styles.go          # All lipgloss styles
   jira/                # Jira REST API client (Cloud v3, Basic Auth)
-  config/              # Config + secrets loading (YAML), user cache
+  config/              # Config + secrets loading (YAML), init, user cache
+.jira-tui/             # Runtime config dir (next to binary, gitignored)
+  config.yaml          # User's Jira config
+  secrets.yaml         # Credentials (never committed)
+  users.json           # User cache
 .agent/                # Agent workspace (specs, context, decisions)
 ```
 

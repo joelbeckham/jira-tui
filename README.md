@@ -23,7 +23,18 @@
 
 ### Configuration
 
-1. Copy `config.example.yaml` to `config.yaml` and edit:
+Run the binary once — it will create a `.jira-tui/` directory next to the
+executable with sample config files:
+
+```bash
+./jira-tui          # auto-creates .jira-tui/ on first run
+# or explicitly:
+./jira-tui init
+```
+
+Then edit the two files it creates:
+
+1. `.jira-tui/config.yaml` — Jira URL, tabs, columns:
 
 ```yaml
 jira:
@@ -37,13 +48,15 @@ tabs:
     sort: priority
 ```
 
-2. Create `secrets.yaml` with your credentials:
+2. `.jira-tui/secrets.yaml` — your credentials:
 
 ```yaml
 jira:
   email: you@company.com
   api_token: your-api-token
 ```
+
+Generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens
 
 ### Build & Run
 

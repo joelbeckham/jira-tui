@@ -8,6 +8,7 @@ coverage.html
 
 # Config files
 config.yaml
+.jira-tui/
 
 # Secrets — NEVER commit credentials
 secrets.yaml

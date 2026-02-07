@@ -51,13 +51,17 @@ type CacheConfig struct {
 	TTL string `yaml:"ttl"` // duration string, e.g. "5m"
 }
 
-// DefaultConfigDir returns the default config directory path.
+// DefaultConfigDir returns the .jira-tui directory next to the executable.
 func DefaultConfigDir() (string, error) {
-	configDir, err := os.UserConfigDir()
+	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("getting config dir: %w", err)
+		return "", fmt.Errorf("finding executable path: %w", err)
 	}
-	return filepath.Join(configDir, "jira-tui"), nil
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("resolving executable symlinks: %w", err)
+	}
+	return filepath.Join(filepath.Dir(exe), ".jira-tui"), nil
 }
 
 // DefaultConfigPath returns the default config file path.

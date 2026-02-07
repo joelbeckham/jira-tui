@@ -17,11 +17,11 @@ configurable filter tabs with vim-style navigation.
   context/           # Background context, constraints, conventions
   decisions/         # Architecture Decision Records (ADRs)
 
-cmd/jira-tui/        # Application entry point
+cmd/jira-tui/        # Application entry point (init subcommand, auto-init)
 internal/
   tui/               # Bubbletea models, views, styles
   jira/              # Jira REST API client
-  config/            # Configuration loading
+  config/            # Configuration loading, init, user cache
 ```
 
 ## Workflow for Agents
@@ -50,5 +50,6 @@ internal/
   (s/p/d/i/a/t/e/del), user cache, async transition + user + priority fetching,
   clipboard copy (y/u), quick-create issue (c), cursor preservation on update,
   optimistic detail view (instant open with partial data), background refresh on
-  esc-back, optimistic delete, detail view comments (optimistic loading)
+  esc-back, optimistic delete, detail view comments (optimistic loading),
+  init command (.jira-tui directory auto-setup)
 - **Next:** Cache layer, column sorting
