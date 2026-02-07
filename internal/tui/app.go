@@ -63,6 +63,13 @@ type usersLoadedMsg struct {
 	err   error
 }
 
+// prioritiesLoadedMsg delivers the priority list for the priority overlay.
+type prioritiesLoadedMsg struct {
+	issues    string // issue key the overlay targets
+	priorities []jira.Priority
+	err        error
+}
+
 // issueDeletedMsg is sent after a successful issue deletion.
 type issueDeletedMsg struct {
 	issueKey string
@@ -104,7 +111,8 @@ type App struct {
 	flash      string // transient status message
 	flashIsErr bool   // true if the flash is an error
 
-	cachedUsers []config.CachedUser // loaded at startup from user cache
+	cachedUsers      []config.CachedUser // loaded at startup from user cache
+	cachedPriorities []jira.Priority     // loaded on first use from API
 }
 
 // NewApp creates a new App model.
@@ -286,6 +294,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.overlay = newSelectionOverlay("Change Status", items)
 			a.overlayIssue = msg.issueKey
 			// overlayAction was already set to overlayActionTransition by handleEditHotkey
+		}
+
+	case prioritiesLoadedMsg:
+		if msg.err != nil {
+			a.flash = msg.err.Error()
+			a.flashIsErr = true
+		} else {
+			a.cachedPriorities = msg.priorities
+			items := make([]selectionItem, len(msg.priorities))
+			for i, p := range msg.priorities {
+				items[i] = selectionItem{ID: p.ID, Label: p.Name}
+			}
+			a.overlay = newSelectionOverlay("Change Priority", items)
+			a.overlayIssue = msg.issues
+			// overlayAction was already set to overlayActionPriority by handleEditHotkey
 		}
 
 	case usersLoadedMsg:
@@ -645,7 +668,7 @@ func (a App) renderStatusBar() string {
 var editHotkeys = map[string]bool{
 	"s": true, "p": true, "d": true, "e": true,
 	"t": true, "i": true, "a": true, "delete": true,
-	"u": true, "k": true,
+	"u": true, "y": true,
 }
 
 // handleEditHotkey processes edit hotkeys (s/p/d/e/t/i/a/del) for the given
@@ -659,8 +682,8 @@ func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea
 
 	// Clipboard hotkeys don't require a Jira connection.
 	switch key {
-	case "k":
-		// Copy issue key to clipboard
+	case "y":
+		// Yank (copy) issue key to clipboard
 		if err := clipboard.WriteAll(issue.Key); err != nil {
 			a.flash = "Clipboard unavailable"
 			a.flashIsErr = true
@@ -721,18 +744,21 @@ func (a App) handleEditHotkey(msg tea.KeyMsg, issue *jira.Issue) (tea.Model, tea
 		return a, a.cmdFetchTransitions(issue.Key), true
 
 	case "p":
-		// Priority — show selection overlay with standard priority levels
-		items := []selectionItem{
-			{ID: "1", Label: "Highest"},
-			{ID: "2", Label: "High"},
-			{ID: "3", Label: "Medium"},
-			{ID: "4", Label: "Low"},
-			{ID: "5", Label: "Lowest"},
-		}
-		a.overlay = newSelectionOverlay("Change Priority", items)
+		// Priority — show selection overlay with priorities (cached or fetch)
 		a.overlayIssue = issue.Key
 		a.overlayAction = overlayActionPriority
-		return a, nil, true
+		if len(a.cachedPriorities) > 0 {
+			items := make([]selectionItem, len(a.cachedPriorities))
+			for i, p := range a.cachedPriorities {
+				items[i] = selectionItem{ID: p.ID, Label: p.Name}
+			}
+			a.overlay = newSelectionOverlay("Change Priority", items)
+			return a, nil, true
+		}
+		// No cache — fetch priorities from API
+		a.flash = "Loading priorities..."
+		a.flashIsErr = false
+		return a, a.cmdFetchPriorities(issue.Key), true
 
 	case "a":
 		// Assignee — show selection overlay with cached users (or fetch them)
@@ -816,7 +842,7 @@ func (a App) handleOverlayResult(result interface{}) (tea.Model, tea.Cmd) {
 		a.flash = "Setting priority on " + issueKey + "..."
 		a.flashIsErr = false
 		return a, a.cmdUpdateField(issueKey, map[string]interface{}{
-			"priority": map[string]interface{}{"name": item.Label},
+			"priority": map[string]interface{}{"id": item.ID},
 		})
 
 	case overlayActionAssignee:
@@ -959,6 +985,21 @@ func (a App) cmdFetchTransitions(issueKey string) tea.Cmd {
 			return transitionsLoadedMsg{issueKey: issueKey, err: fmt.Errorf("get transitions: %w", err)}
 		}
 		return transitionsLoadedMsg{issueKey: issueKey, transitions: transitions}
+	}
+}
+
+// cmdFetchPriorities fetches available priorities from the Jira instance.
+func (a App) cmdFetchPriorities(issueKey string) tea.Cmd {
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	return func() tea.Msg {
+		priorities, err := client.GetPriorities(context.Background())
+		if err != nil {
+			return prioritiesLoadedMsg{issues: issueKey, err: fmt.Errorf("get priorities: %w", err)}
+		}
+		return prioritiesLoadedMsg{issues: issueKey, priorities: priorities}
 	}
 }
 

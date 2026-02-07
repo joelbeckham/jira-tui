@@ -551,6 +551,7 @@ func TestEditHotkeyIFromDetailView(t *testing.T) {
 func TestEditHotkeySpawnsOverlays(t *testing.T) {
 	app := testAppReady()
 	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.cachedPriorities = []jira.Priority{{ID: "3", Name: "Medium"}}
 
 	t.Run("p opens priority overlay", func(t *testing.T) {
 		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
@@ -834,6 +835,7 @@ func TestFlashAppearsInStatusBar(t *testing.T) {
 func TestOverlayEscCancels(t *testing.T) {
 	app := testAppReady()
 	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.cachedPriorities = []jira.Priority{{ID: "3", Name: "Medium"}}
 
 	// Open priority overlay
 	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
@@ -856,6 +858,7 @@ func TestOverlayEscCancels(t *testing.T) {
 func TestOverlayRoutesKeysToOverlay(t *testing.T) {
 	app := testAppReady()
 	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.cachedPriorities = []jira.Priority{{ID: "3", Name: "Medium"}}
 
 	// Open priority overlay
 	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
@@ -1014,6 +1017,7 @@ func TestIssueDeletedMsgError(t *testing.T) {
 func TestOverlayAppearsInView(t *testing.T) {
 	app := testAppReady()
 	app.client = jira.NewClient("https://fake.atlassian.net", "test@test.com", "token")
+	app.cachedPriorities = []jira.Priority{{ID: "3", Name: "Medium"}}
 
 	// Open priority overlay
 	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})

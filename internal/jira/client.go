@@ -257,6 +257,25 @@ func (c *Client) AssignIssue(ctx context.Context, issueKeyOrID, accountID string
 	return nil
 }
 
+// Priority represents a Jira priority with its ID and name.
+type Priority struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetPriorities fetches all available priorities from the Jira instance.
+func (c *Client) GetPriorities(ctx context.Context) ([]Priority, error) {
+	data, err := c.do(ctx, http.MethodGet, "/rest/api/3/priority", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting priorities: %w", err)
+	}
+	var priorities []Priority
+	if err := json.Unmarshal(data, &priorities); err != nil {
+		return nil, fmt.Errorf("parsing priorities: %w", err)
+	}
+	return priorities, nil
+}
+
 // SearchAllUsers fetches all active users from the instance.
 // The Jira API returns users in pages; this method paginates through all results.
 func (c *Client) SearchAllUsers(ctx context.Context) ([]User, error) {

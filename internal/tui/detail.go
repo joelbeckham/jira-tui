@@ -137,7 +137,7 @@ func (v *issueDetailView) renderContent() string {
 	var b strings.Builder
 
 	// Header: KEY(k) ▸ Parent (if any)
-	header := detailKeyStyle.Render(issue.Key) + detailHintStyle.Render("(k)")
+	header := detailKeyStyle.Render(issue.Key) + detailHintStyle.Render("(y)")
 	if fields.Parent != nil {
 		parentLabel := fields.Parent.Key
 		if fields.Parent.Fields != nil && fields.Parent.Fields.Summary != "" {
