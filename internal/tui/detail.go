@@ -143,8 +143,13 @@ func (v *issueDetailView) renderContent() string {
 
 	var b strings.Builder
 
-	// Header: KEY ▸ Parent (if any)
-	header := detailKeyStyle.Render(issue.Key) + detailHintStyle.Render("(y)")
+	// Summary (t) — shown first as the title
+	b.WriteString(lipgloss.NewStyle().Bold(true).Render(fields.Summary))
+	b.WriteString("  " + detailHintStyle.Render("(t)"))
+	b.WriteString("\n")
+
+	// Header: KEY(y,u,o) ▸ Parent (if any)
+	header := detailKeyStyle.Render(issue.Key) + detailHintStyle.Render("(y,u,o)")
 	if fields.Parent != nil {
 		parentLabel := fields.Parent.Key
 		if fields.Parent.Fields != nil && fields.Parent.Fields.Summary != "" {
@@ -171,20 +176,7 @@ func (v *issueDetailView) renderContent() string {
 		b.WriteString("\n")
 	}
 
-	// URL line
-	if v.baseURL != "" {
-		url := v.baseURL + "/browse/" + issue.Key
-		b.WriteString(detailTypeStyle.Render(url))
-		b.WriteString("  " + detailHintStyle.Render("(u,o)"))
-		b.WriteString("\n")
-	}
-
 	b.WriteString("\n")
-
-	// Summary (t)
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(fields.Summary))
-	b.WriteString("  " + detailHintStyle.Render("(t)"))
-	b.WriteString("\n\n")
 
 	// Description (e)
 	if v.loading {
