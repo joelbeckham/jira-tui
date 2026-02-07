@@ -48,7 +48,7 @@ internal/
 - **Also done:** Priority icons, search API migration, detail view, ADF extraction,
   overlay system (selection/textinput/textarea/confirm), all hotkey editing
   (s/p/d/i/a/t/e/del), user cache, async transition + user + priority fetching,
-  clipboard copy (y/u), quick-create issue (c), cursor preservation on update,
+  clipboard copy (y/u), quick-create issue (c, auto-assigns + To Do), cursor preservation on update,
   optimistic detail view (instant open with partial data), background refresh on
   esc-back, optimistic delete, detail view comments (optimistic loading),
   init command (.jira-tui directory auto-setup), add comment from detail view (c),

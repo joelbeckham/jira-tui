@@ -21,7 +21,7 @@ to show it.
 
 ## Non-Goals
 
-- Full issue creation form (description, priority, assignee, etc.) — keep it minimal
+- Full issue creation form (description, priority, etc.) — keep it minimal
 - Creating subtasks or epics (subtask types are filtered out)
 - Creating issues in arbitrary projects (uses configured `default_project`)
 
@@ -44,14 +44,17 @@ to show it.
    issue types fetched from the Jira API for the configured `default_project`.
 3. Subtask types are excluded from the issue type list.
 4. Selecting a type creates the issue via `POST /rest/api/3/issue` with the
-   project key, summary, and issue type name.
-5. On success, the active tab refreshes and a flash message shows "Created PROJ-123".
-6. On failure, a flash error is displayed.
-7. An empty summary is rejected with a flash message "Summary cannot be empty".
-8. If `default_project` is not configured, pressing `c` shows a helpful error:
+   project key, summary, issue type name, and assignee (current user).
+5. After creation, the issue is transitioned to "To Do" (best-effort; if the
+   workflow doesn't have a "To Do" status or the transition isn't available,
+   the issue keeps its default status).
+6. On success, the active tab refreshes and a flash message shows "Created PROJ-123".
+7. On failure, a flash error is displayed.
+8. An empty summary is rejected with a flash message "Summary cannot be empty".
+9. If `default_project` is not configured, pressing `c` shows a helpful error:
    "Set default_project in config to create issues".
-9. If not connected to Jira, pressing `c` shows "Not connected to Jira".
-10. Pressing Esc at any step cancels the flow.
+10. If not connected to Jira, pressing `c` shows "Not connected to Jira".
+11. Pressing Esc at any step cancels the flow.
 
 ### Non-Functional
 
@@ -76,7 +79,11 @@ jira:
   issue types with their statuses; we extract `{id, name, subtask}` and filter
   out subtasks.
 - **Create issue:** `POST /rest/api/3/issue` — existing `CreateIssue` client
-  method.
+  method. Sets `assignee` to the current user's account ID.
+- **Get transitions:** `GET /rest/api/3/issue/{issueKey}/transitions` — used
+  post-create to find the "To Do" transition.
+- **Transition issue:** `POST /rest/api/3/issue/{issueKey}/transitions` — used
+  to move the newly created issue to "To Do".
 
 ### Multi-Step Overlay Flow
 

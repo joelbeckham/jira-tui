@@ -1507,24 +1507,43 @@ func (a App) cmdFetchIssueTypes() tea.Cmd {
 }
 
 // cmdCreateIssue creates a new issue with the given summary and type.
+// It auto-assigns the issue to the current user and transitions it to "To Do".
 func (a App) cmdCreateIssue(summary, issueTypeName string) tea.Cmd {
 	if a.client == nil {
 		return nil
 	}
 	client := a.client
 	project := a.defaultProject
+	var accountID string
+	if a.user != nil {
+		accountID = a.user.AccountID
+	}
 	return func() tea.Msg {
-		req := jira.CreateIssueRequest{
-			Fields: map[string]interface{}{
-				"project":   map[string]interface{}{"key": project},
-				"summary":   summary,
-				"issuetype": map[string]interface{}{"name": issueTypeName},
-			},
+		ctx := context.Background()
+		fields := map[string]interface{}{
+			"project":   map[string]interface{}{"key": project},
+			"summary":   summary,
+			"issuetype": map[string]interface{}{"name": issueTypeName},
 		}
-		resp, err := client.CreateIssue(context.Background(), req)
+		if accountID != "" {
+			fields["assignee"] = map[string]interface{}{"accountId": accountID}
+		}
+		req := jira.CreateIssueRequest{Fields: fields}
+		resp, err := client.CreateIssue(ctx, req)
 		if err != nil {
 			return issueCreatedMsg{err: fmt.Errorf("create issue: %w", err)}
 		}
+
+		// Best-effort transition to "To Do".
+		if transitions, err := client.GetTransitions(ctx, resp.Key); err == nil {
+			for _, t := range transitions {
+				if t.To != nil && t.To.Name == "To Do" {
+					_ = client.TransitionIssue(ctx, resp.Key, t.ID)
+					break
+				}
+			}
+		}
+
 		return issueCreatedMsg{issueKey: resp.Key}
 	}
 }
