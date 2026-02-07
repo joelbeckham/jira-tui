@@ -303,6 +303,16 @@ func (v *issueDetailView) Update(msg tea.Msg) tea.Cmd {
 	if !v.ready {
 		return nil
 	}
+	if km, ok := msg.(tea.KeyMsg); ok {
+		switch km.String() {
+		case "home":
+			v.viewport.GotoTop()
+			return nil
+		case "end":
+			v.viewport.GotoBottom()
+			return nil
+		}
+	}
 	var cmd tea.Cmd
 	v.viewport, cmd = v.viewport.Update(msg)
 	return cmd

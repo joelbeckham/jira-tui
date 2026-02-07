@@ -73,6 +73,7 @@ make run
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move down / up |
+| `home` / `end` | Jump to top / bottom |
 | `enter` | Open issue detail |
 | `esc` | Go back / clear filter |
 | `1`-`9` | Switch tabs |
