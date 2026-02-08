@@ -837,7 +837,7 @@ func (a App) renderActiveTab() string {
 	case tabEmpty:
 		parts = append(parts, emptyStyle.Render("No issues found"))
 	case tabReady:
-		parts = append(parts, t.table.View())
+		parts = append(parts, colorizePriorities(t.table.View()))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
