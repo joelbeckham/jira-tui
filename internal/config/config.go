@@ -45,7 +45,6 @@ type TabConfig struct {
 	FilterURL string   `yaml:"filter_url,omitempty"`
 	JQL       string   `yaml:"jql,omitempty"`
 	Columns   []string `yaml:"columns"`
-	Sort      string   `yaml:"sort,omitempty"`
 }
 
 // CacheConfig holds caching configuration.
