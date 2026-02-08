@@ -28,6 +28,7 @@ type IssueFields struct {
 	Project     *Named       `json:"project"`
 	Created     string       `json:"created"`
 	Updated     string       `json:"updated"`
+	DueDate     string       `json:"duedate"`
 	Labels      []string     `json:"labels"`
 	Subtasks    []Issue      `json:"subtasks"`
 	IssueLinks  []IssueLink  `json:"issuelinks"`

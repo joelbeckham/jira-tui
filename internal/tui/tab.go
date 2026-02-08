@@ -159,6 +159,8 @@ func mergeSearchFields(columns []string) []string {
 		switch f {
 		case "type":
 			f = "issuetype"
+		case "due_date", "due date", "due":
+			f = "duedate"
 		case "key":
 			return // key is always returned by the API
 		}
@@ -229,6 +231,8 @@ func fieldValue(issue jira.Issue, column string) string {
 		return formatDate(issue.Fields.Created)
 	case "updated":
 		return formatDate(issue.Fields.Updated)
+	case "duedate", "due_date", "due date", "due":
+		return formatDate(issue.Fields.DueDate)
 	}
 	return ""
 }
