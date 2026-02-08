@@ -225,7 +225,9 @@ func (a App) checkConnection() tea.Cmd {
 	}
 }
 
-// loadTab returns a Cmd that fetches filter JQL then searches for issues.
+// loadTab returns a Cmd that fetches issues for a tab.
+// If the tab has a jql field, it searches directly with that JQL.
+// If the tab has a filter_id, it fetches the filter's JQL first.
 func (a App) loadTab(index int) tea.Cmd {
 	if a.client == nil || index < 0 || index >= len(a.tabs) {
 		return nil
@@ -236,23 +238,31 @@ func (a App) loadTab(index int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 
-		filterID := cfg.FilterID
-		// If only filter_url is provided, try to extract filter ID from it
-		// For now, we require filter_id
-		if filterID == "" {
+		var jql string
+		var filter *jira.Filter
+
+		switch {
+		case cfg.JQL != "":
+			// Direct JQL — no filter fetch needed
+			jql = cfg.JQL
+
+		case cfg.FilterID != "":
+			f, err := client.GetFilter(ctx, cfg.FilterID)
+			if err != nil {
+				return tabDataMsg{tabIndex: index, err: err}
+			}
+			filter = f
+			jql = f.JQL
+
+		default:
 			return tabDataMsg{
 				tabIndex: index,
-				err:      fmt.Errorf("filter_id is required (filter_url not yet supported)"),
+				err:      fmt.Errorf("filter_url is not yet supported"),
 			}
 		}
 
-		filter, err := client.GetFilter(ctx, filterID)
-		if err != nil {
-			return tabDataMsg{tabIndex: index, err: err}
-		}
-
 		result, err := client.SearchIssues(ctx, jira.SearchOptions{
-			JQL:        filter.JQL,
+			JQL:        jql,
 			Fields:     mergeSearchFields(cfg.Columns),
 			MaxResults: 50,
 		})

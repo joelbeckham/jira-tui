@@ -148,7 +148,60 @@ tabs:
 	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
 	_, err := Load(cfgPath, secPath)
 	if err == nil {
-		t.Fatal("expected validation error for missing filter_id/filter_url")
+		t.Fatal("expected validation error for missing filter_id/filter_url/jql")
+	}
+}
+
+func TestLoadTabJQLValid(t *testing.T) {
+	cfgPath := writeTestFile(t, "config.yaml", `
+jira:
+  base_url: https://example.atlassian.net
+tabs:
+  - label: "Custom"
+    jql: "project = PROJ AND status = Open ORDER BY created DESC"
+    columns: ["key", "summary", "status"]
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	cfg, err := Load(cfgPath, secPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Tabs[0].JQL != "project = PROJ AND status = Open ORDER BY created DESC" {
+		t.Errorf("unexpected JQL: %s", cfg.Tabs[0].JQL)
+	}
+}
+
+func TestLoadTabJQLAndFilterIDMutuallyExclusive(t *testing.T) {
+	cfgPath := writeTestFile(t, "config.yaml", `
+jira:
+  base_url: https://example.atlassian.net
+tabs:
+  - label: "Conflict"
+    filter_id: "10100"
+    jql: "project = PROJ"
+    columns: ["key", "summary"]
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
+	if err == nil {
+		t.Fatal("expected validation error for jql + filter_id")
+	}
+}
+
+func TestLoadTabJQLAndFilterURLMutuallyExclusive(t *testing.T) {
+	cfgPath := writeTestFile(t, "config.yaml", `
+jira:
+  base_url: https://example.atlassian.net
+tabs:
+  - label: "Conflict"
+    filter_url: "https://example.atlassian.net/issues/?filter=10100"
+    jql: "project = PROJ"
+    columns: ["key", "summary"]
+`)
+	secPath := writeTestFile(t, "secrets.yaml", validSecrets)
+	_, err := Load(cfgPath, secPath)
+	if err == nil {
+		t.Fatal("expected validation error for jql + filter_url")
 	}
 }
 
@@ -227,6 +280,57 @@ func TestValidate(t *testing.T) {
 				}},
 			},
 			wantErr: false,
+		},
+		{
+			name: "valid with jql",
+			config: Config{
+				Jira: JiraConfig{
+					BaseURL:  "https://example.atlassian.net",
+					Email:    "user@example.com",
+					APIToken: "token",
+				},
+				Tabs: []TabConfig{{
+					Label:   "Custom",
+					JQL:     "project = PROJ ORDER BY created DESC",
+					Columns: []string{"key", "summary"},
+				}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "jql and filter_id both set",
+			config: Config{
+				Jira: JiraConfig{
+					BaseURL:  "https://example.atlassian.net",
+					Email:    "user@example.com",
+					APIToken: "token",
+				},
+				Tabs: []TabConfig{{
+					Label:    "Conflict",
+					FilterID: "123",
+					JQL:      "project = PROJ",
+					Columns:  []string{"key", "summary"},
+				}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "all three sources set",
+			config: Config{
+				Jira: JiraConfig{
+					BaseURL:  "https://example.atlassian.net",
+					Email:    "user@example.com",
+					APIToken: "token",
+				},
+				Tabs: []TabConfig{{
+					Label:     "All",
+					FilterID:  "123",
+					FilterURL: "https://example.atlassian.net/issues/?filter=123",
+					JQL:       "project = PROJ",
+					Columns:   []string{"key", "summary"},
+				}},
+			},
+			wantErr: true,
 		},
 	}
 

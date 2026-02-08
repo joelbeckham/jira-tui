@@ -20,3 +20,8 @@ tabs:
     columns: [key, summary, status, assignee, reporter]
     sort: created
 
+  # You can also use a raw JQL query instead of a filter_id:
+  - label: "Recent"
+    jql: "project = PROJ AND updated >= -7d ORDER BY updated DESC"
+    columns: [key, summary, status, assignee]
+

@@ -4,7 +4,7 @@
 
 ## Features
 
-- **Filter tabs** — configure multiple saved Jira filters as tabs, each with custom columns
+- **Filter tabs** — configure multiple saved Jira filters or raw JQL queries as tabs, each with custom columns
 - **Vim-style navigation** — `j`/`k` to move, `enter` to open detail view, `esc` to go back
 - **Quick filter** — press `/` to filter issues client-side by text
 - **Inline editing** — change status (`s`), priority (`p`), assignee (`a`), title (`t`), description (`e`) via overlays
@@ -49,6 +49,9 @@ tabs:
     filter_id: "10042"
     columns: [key, summary, status, assignee, priority]
     sort: priority
+  - label: "Open Bugs"
+    jql: "project = PROJ AND type = Bug AND status != Done ORDER BY priority DESC"
+    columns: [key, summary, status, priority]
 ```
 
 2. `.jira-tui/secrets.yaml` — your credentials:

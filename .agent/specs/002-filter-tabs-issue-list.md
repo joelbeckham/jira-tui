@@ -14,6 +14,11 @@ primary interface users will interact with.
 ### Tab Bar
 
 - Tabs are defined in `config.yaml` under `tabs:`
+- Each tab must specify exactly one data source: `filter_id`, `filter_url`, or `jql`
+  - `filter_id` — references a saved Jira filter; the filter's JQL is fetched at runtime
+  - `jql` — an arbitrary JQL query string used directly (no filter fetch needed)
+  - `filter_url` — a Jira filter URL (not yet implemented)
+  - Specifying more than one is a config validation error
 - Rendered across the top of the screen, always visible
 - Active tab is highlighted; inactive tabs are dimmed
 - Switch tabs with number keys `1`–`9`
@@ -22,6 +27,7 @@ primary interface users will interact with.
 ### Issue List (per tab)
 
 - Each tab calls `GetFilter(filterID)` to get the JQL, then `SearchIssues(jql)`
+  - Or, if `jql` is configured, calls `SearchIssues(jql)` directly (no filter fetch)
 - Results rendered in a `bubbles/table` with configurable columns
 - Column widths are auto-proportional to terminal width:
   - `key`: 12 chars fixed

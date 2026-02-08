@@ -38,10 +38,12 @@ type JiraSecrets struct {
 }
 
 // TabConfig defines a filter-backed tab in the TUI.
+// Exactly one of FilterID, FilterURL, or JQL must be provided.
 type TabConfig struct {
 	Label     string   `yaml:"label"`
 	FilterID  string   `yaml:"filter_id,omitempty"`
 	FilterURL string   `yaml:"filter_url,omitempty"`
+	JQL       string   `yaml:"jql,omitempty"`
 	Columns   []string `yaml:"columns"`
 	Sort      string   `yaml:"sort,omitempty"`
 }
@@ -135,8 +137,22 @@ func (c *Config) Validate() error {
 		if tab.Label == "" {
 			return fmt.Errorf("tabs[%d].label is required", i)
 		}
-		if tab.FilterID == "" && tab.FilterURL == "" {
-			return fmt.Errorf("tabs[%d] must have filter_id or filter_url", i)
+		// Count how many data sources are specified
+		sources := 0
+		if tab.FilterID != "" {
+			sources++
+		}
+		if tab.FilterURL != "" {
+			sources++
+		}
+		if tab.JQL != "" {
+			sources++
+		}
+		if sources == 0 {
+			return fmt.Errorf("tabs[%d] must have filter_id, filter_url, or jql", i)
+		}
+		if sources > 1 {
+			return fmt.Errorf("tabs[%d] must have only one of filter_id, filter_url, or jql", i)
 		}
 		if len(tab.Columns) == 0 {
 			return fmt.Errorf("tabs[%d].columns must not be empty", i)

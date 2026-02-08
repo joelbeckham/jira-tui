@@ -28,6 +28,11 @@ tabs:
     filter_id: "10100"
     columns: [key, summary, status, assignee, reporter]
     sort: created
+
+  # You can also use a raw JQL query instead of a saved filter:
+  # - label: "Recent"
+  #   jql: "project = PROJ AND updated >= -7d ORDER BY updated DESC"
+  #   columns: [key, summary, status, assignee]
 `
 
 // SampleSecrets is the default secrets.yaml written by Init.
