@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/jbeckham/jira-tui/internal/config"
 	"github.com/jbeckham/jira-tui/internal/jira"
@@ -18,14 +20,15 @@ const (
 
 // tab holds the state for a single filter-backed tab.
 type tab struct {
-	config      config.TabConfig
-	table       table.Model
-	issues      []jira.Issue
-	state       tabState
-	errMsg      string
-	jiraFilter  *jira.Filter // the resolved filter (contains JQL)
-	columns     []string     // column names from config
-	quickFilter issueFilter  // client-side quick filter
+	config         config.TabConfig
+	table          table.Model
+	issues         []jira.Issue
+	state          tabState
+	errMsg         string
+	jiraFilter     *jira.Filter // the resolved filter (contains JQL)
+	columns        []string     // column names from config
+	quickFilter    issueFilter  // client-side quick filter
+	statusReplacer *strings.Replacer // post-render status colorizer
 }
 
 // newTab creates a tab from a TabConfig. The table is initialized empty;
@@ -67,6 +70,7 @@ func (t *tab) setSize(width, height int) {
 func (t *tab) setIssues(issues []jira.Issue) {
 	t.issues = issues
 	t.quickFilter.clear()
+	t.statusReplacer = buildStatusReplacer(issues)
 	if len(issues) == 0 {
 		t.state = tabEmpty
 	} else {

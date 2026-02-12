@@ -63,6 +63,13 @@ func statusColor(status *jira.Status) lipgloss.Style {
 	if status == nil || status.StatusCategory == nil {
 		return s
 	}
+	// Override specific status names before falling through to category.
+	switch strings.ToLower(status.Name) {
+	case "backlog":
+		return s.Foreground(lipgloss.Color("240")) // dark gray
+	case "triage":
+		return s.Foreground(lipgloss.Color("248")) // light gray
+	}
 	switch status.StatusCategory.Key {
 	case "new":
 		return s.Foreground(lipgloss.Color("12")) // blue

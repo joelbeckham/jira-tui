@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jbeckham/jira-tui/internal/jira"
 )
 
 // priorityDef holds the icon and color for a Jira priority level.
@@ -88,4 +89,59 @@ var priorityReplacer = strings.NewReplacer(
 // colors after layout is computed.
 func colorizePriorities(s string) string {
 	return priorityReplacer.Replace(s)
+}
+
+// statusCategoryColor maps Jira status category keys to ANSI color codes,
+// matching the detail view's statusColor function.
+var statusCategoryColor = map[string]string{
+	"new":           "12",  // blue
+	"indeterminate": "11",  // yellow
+	"done":          "10",  // green
+}
+
+// ansiColorText wraps text in ANSI foreground color using a 256-color code.
+// Uses SGR 38;5 to set color and SGR 39 to reset only the foreground.
+func ansiColorText(text, colorCode string) string {
+	return fmt.Sprintf("\x1b[38;5;%sm%s\x1b[39m", colorCode, text)
+}
+
+// statusNameColor overrides color for specific status names,
+// taking precedence over the category-based color.
+var statusNameColor = map[string]string{
+	"Backlog": "240", // dark gray
+	"Triage":  "248", // light gray
+}
+
+// buildStatusReplacer scans issues for unique status names and their category
+// keys, returning a Replacer that colorizes those names in rendered output.
+func buildStatusReplacer(issues []jira.Issue) *strings.Replacer {
+	seen := make(map[string]string) // status name → color code
+	for _, issue := range issues {
+		s := issue.Fields.Status
+		if s == nil || seen[s.Name] != "" {
+			continue
+		}
+		// Check name-level overrides first.
+		if code, ok := statusNameColor[s.Name]; ok {
+			seen[s.Name] = code
+			continue
+		}
+		catKey := ""
+		if s.StatusCategory != nil {
+			catKey = s.StatusCategory.Key
+		}
+		if code, ok := statusCategoryColor[catKey]; ok {
+			seen[s.Name] = code
+		} else {
+			seen[s.Name] = "252" // light gray default
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	pairs := make([]string, 0, len(seen)*2)
+	for name, code := range seen {
+		pairs = append(pairs, name, ansiColorText(name, code))
+	}
+	return strings.NewReplacer(pairs...)
 }
