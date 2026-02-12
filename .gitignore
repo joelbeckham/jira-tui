@@ -18,6 +18,9 @@ secrets.yaml
 .DS_Store
 Thumbs.db
 
+# Generated Windows resource files
+*.syso
+
 # IDE
 .idea/
 *.swp
