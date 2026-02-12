@@ -80,7 +80,8 @@ make run
 | `home` / `end` | Jump to top / bottom |
 | `enter` | Open issue detail / drill into related issue |
 | `esc` | Go back / clear filter |
-| `1`-`9` | Switch tabs |
+| `1`-`9` | Switch to tab N |
+| `←` / `→` or `h` / `l` | Cycle tabs left / right |
 | `/` | Quick filter (`enter` or `↓` to confirm, `esc` to cancel) |
 | `r` | Refresh tab |
 | `q` | Quit |

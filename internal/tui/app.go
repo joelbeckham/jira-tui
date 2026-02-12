@@ -705,6 +705,24 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
+	case "left", "h":
+		if len(a.tabs) > 0 {
+			if a.activeTab < len(a.tabs) {
+				a.tabs[a.activeTab].clearFilter()
+			}
+			a.activeTab = (a.activeTab - 1 + len(a.tabs)) % len(a.tabs)
+			return a, nil
+		}
+
+	case "right", "l":
+		if len(a.tabs) > 0 {
+			if a.activeTab < len(a.tabs) {
+				a.tabs[a.activeTab].clearFilter()
+			}
+			a.activeTab = (a.activeTab + 1) % len(a.tabs)
+			return a, nil
+		}
+
 	default:
 		// Edit hotkeys on the selected issue in the list
 		if a.activeTab < len(a.tabs) && a.tabs[a.activeTab].state == tabReady {
