@@ -52,6 +52,9 @@ var (
 
 	detailParentStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("241"))
+
+	detailDueDateStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("9")) // red
 )
 
 // statusColor returns a lipgloss style colored by status category.
@@ -226,6 +229,9 @@ func (v *issueDetailView) renderContent() string {
 	}
 	b.WriteString(renderField("Created", formatDetailDate(fields.Created)))
 	b.WriteString(renderField("Updated", formatDetailDate(fields.Updated)))
+	if fields.DueDate != "" {
+		b.WriteString(renderFieldStyled("Due Date", formatDetailDate(fields.DueDate), detailDueDateStyle))
+	}
 
 	// Subtasks (only available from full fetch)
 	if v.loading {
@@ -405,6 +411,13 @@ func renderField(label, value string) string {
 		return ""
 	}
 	return detailLabelStyle.Render(label) + detailValueStyle.Render(value) + "\n"
+}
+
+func renderFieldStyled(label, value string, style lipgloss.Style) string {
+	if value == "" {
+		return ""
+	}
+	return detailLabelStyle.Render(label) + style.Render(value) + "\n"
 }
 
 func renderFieldHint(label, value, hint string) string {

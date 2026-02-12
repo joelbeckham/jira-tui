@@ -146,7 +146,7 @@ func (t *tab) clearFilter() {
 // view can render partial data immediately when opened from the list.
 var detailBaseFields = []string{
 	"summary", "status", "priority", "issuetype", "assignee",
-	"reporter", "project", "created", "updated",
+	"reporter", "project", "created", "updated", "duedate",
 }
 
 // mergeSearchFields combines configured columns with the base fields needed by
