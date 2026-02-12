@@ -609,7 +609,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.overlayAction = overlayActionDrillIn
 				return a, nil
 			}
-			if key == "c" {
+			if key == "m" {
 				// Add comment
 				if a.client == nil {
 					a.flash = "Not connected to Jira"
@@ -925,7 +925,7 @@ func (a App) renderStatusBar() string {
 	}
 
 	if len(a.viewStack) > 0 {
-		parts = append(parts, helpStyle.Render("enter: related  c: comment  d: done  del: delete  q: quit"))
+		parts = append(parts, helpStyle.Render("enter: related  m: comment  d: done  del: delete  q: quit"))
 	} else {
 		parts = append(parts, helpStyle.Render("/: filter  c: create  o: open  q: quit"))
 	}
